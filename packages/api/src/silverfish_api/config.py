@@ -1,32 +1,55 @@
-"""API configuration, sourced from the environment.
+"""API configuration via pydantic-settings.
+
+Values are resolved with this precedence (highest first):
+
+    real environment variable  >  .env.local  >  .env  >  built-in default
 
 The library directory is the one knob that matters for the reference API:
 ``SILVERFISH_LIBRARY_DIR`` points at a Calibre library folder (containing
-``metadata.db``). If unset, a local default directory is used so the API runs
-out of the box for testing.
+``metadata.db``). If nothing sets it, a local default directory is used so the
+API runs out of the box. Secrets (added later: SMTP, source tokens) belong in
+``.env.local``, which is gitignored.
 """
 
-import os
-from dataclasses import dataclass
 from pathlib import Path
 
-ENV_LIBRARY_DIR = "SILVERFISH_LIBRARY_DIR"
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_PREFIX = "SILVERFISH_"
 DEFAULT_LIBRARY_DIR = "silverfish-library"
 
 
-@dataclass(frozen=True, slots=True)
-class Settings:
+class Settings(BaseSettings):
     """Resolved API settings."""
 
-    library_dir: Path
+    model_config = SettingsConfigDict(
+        env_prefix=ENV_PREFIX,
+        # Later files take precedence, so .env.local overrides .env. Real
+        # environment variables still win over both (pydantic-settings default).
+        env_file=(".env", ".env.local"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    library_dir: Path = Field(default=Path(DEFAULT_LIBRARY_DIR))
 
     @property
     def metadata_db(self) -> Path:
         return self.library_dir / "metadata.db"
 
 
-def load_settings() -> Settings:
-    """Build settings from the environment, applying the local default."""
-    raw = os.environ.get(ENV_LIBRARY_DIR, "").strip()
-    library_dir = Path(raw) if raw else Path(DEFAULT_LIBRARY_DIR)
-    return Settings(library_dir=library_dir.resolve())
+def load_settings(env_dir: Path | None = None) -> Settings:
+    """Build settings, optionally reading ``.env``/``.env.local`` from *env_dir*.
+
+    *env_dir* exists mainly for tests; in normal use the files are read from the
+    current working directory.
+    """
+    if env_dir is None:
+        return Settings()
+    # `_env_file` is a documented pydantic-settings runtime override to point at
+    # specific env files, but it is not present in the type stubs — hence the
+    # justified ignore. Order matters: .env.local overrides .env.
+    return Settings(
+        _env_file=(env_dir / ".env", env_dir / ".env.local"),  # type: ignore[call-arg]
+    )
