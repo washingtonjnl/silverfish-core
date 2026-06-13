@@ -2,12 +2,13 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 
-from silverfish_api.deps import ImportServiceDep, RepositoryDep
+from silverfish_api.deps import ImportServiceDep, RepositoryDep, StorageDep
 from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500
 from silverfish_api.schemas import BookOut, BookPage
 from silverfish_core.domain.models import Book
+from silverfish_core.ports import FileStorage
 from silverfish_core.ports.types import (
     Page,
     SearchFilters,
@@ -18,6 +19,19 @@ from silverfish_core.ports.types import (
 from silverfish_core.services.import_book import UploadedFile
 
 router = APIRouter(tags=["books"])
+
+
+def _read_or_none(storage: FileStorage, relative_path: str | None) -> bytes | None:
+    """Read a file via storage, returning ``None`` if the path is unknown or the
+    file is missing. Keeps the not-found handling in one place.
+    """
+    if relative_path is None:
+        return None
+    try:
+        return storage.read_book_file(relative_path)
+    except (FileNotFoundError, ValueError):
+        return None
+
 
 # Formats accepted for upload (mirrors Calibre's common set).
 ALLOWED_UPLOAD_EXTENSIONS = (
@@ -96,6 +110,39 @@ def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
     return BookOut.from_domain(book)
+
+
+@router.get(
+    "/books/{book_id}/cover",
+    responses={**ERROR_404, **ERROR_500},
+    response_class=Response,
+)
+def get_book_cover(book_id: int, repository: RepositoryDep, storage: StorageDep) -> Response:
+    relative = repository.cover_path(book_id)
+    data = _read_or_none(storage, relative)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Cover not found")
+    return Response(content=data, media_type="image/jpeg")
+
+
+@router.get(
+    "/books/{book_id}/formats/{book_format}",
+    responses={**ERROR_404, **ERROR_500},
+    response_class=Response,
+)
+def download_book_format(
+    book_id: int, book_format: str, repository: RepositoryDep, storage: StorageDep
+) -> Response:
+    relative = repository.format_path(book_id, book_format)
+    data = _read_or_none(storage, relative)
+    if data is None or relative is None:
+        raise HTTPException(status_code=404, detail="Format not found")
+    filename = relative.rsplit("/", 1)[-1]
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/search", response_model=BookPage, responses=_LIST_ERRORS)

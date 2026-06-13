@@ -38,3 +38,17 @@ class MetadataRepository(Protocol):
     def delete_book(self, book_id: int) -> None:
         """Remove the book with *book_id*."""
         ...
+
+    def cover_path(self, book_id: int) -> str | None:
+        """Return the storage-relative path to the book's cover, or ``None``.
+
+        The path is for internal use (read via ``FileStorage``); it is never
+        exposed to API clients.
+        """
+        ...
+
+    def format_path(self, book_id: int, book_format: str) -> str | None:
+        """Return the storage-relative path to the book's file in *book_format*,
+        or ``None`` if absent. Format match is case-insensitive.
+        """
+        ...
