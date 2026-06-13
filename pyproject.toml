@@ -1,0 +1,97 @@
+[project]
+name = "silverfish-workspace"
+version = "0.0.0"
+description = "Silverfish — open-source core for an ebook library (Calibre-dialect) exposed as a lib + REST API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+
+# This is a workspace root; it ships no code itself. Real packages live under packages/*.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-cov>=7.0",
+    "httpx>=0.28",
+    "pre-commit>=4.4",
+]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+silverfish-core = { workspace = true }
+silverfish-api = { workspace = true }
+
+# ----------------------------------------------------------------------------
+# Ruff — linter + formatter (runs in pre-commit and CI)
+# ----------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages/core/src", "packages/api/src"]
+
+[tool.ruff.lint]
+# Broad, strict-ish default rule set. We treat lint failures as build failures.
+select = [
+    "E", "W",      # pycodestyle
+    "F",            # pyflakes
+    "I",            # isort
+    "N",            # pep8-naming
+    "UP",           # pyupgrade
+    "B",            # flake8-bugbear
+    "A",            # flake8-builtins
+    "C4",           # flake8-comprehensions
+    "SIM",          # flake8-simplify
+    "PTH",          # flake8-use-pathlib
+    "RUF",          # ruff-specific
+    "S",            # flake8-bandit (security)
+    "ANN",          # flake8-annotations (enforce typing at boundaries)
+    "TID",          # flake8-tidy-imports
+]
+ignore = [
+    "ANN401",  # allow explicitly-justified dynamic typing is still forbidden by policy; kept off via mypy
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use asserts and don't need return-type annotations on test functions.
+"**/tests/**" = ["S101", "ANN201", "ANN001"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# ----------------------------------------------------------------------------
+# mypy — strict static typing (zero `any`, nothing committed with type breakage)
+# ----------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+# "Zero any" in *our* code: forbid bare generics, untyped defs, values decaying
+# to Any from untyped imports. We deliberately do NOT set `disallow_any_explicit`
+# because it forbids inheriting from Pydantic/FastAPI base classes (whose own
+# stubs mention Any) — that overshoots without making our code safer.
+disallow_any_generics = true
+disallow_any_unimported = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+mypy_path = ["packages/core/src", "packages/api/src"]
+files = ["packages/core/src", "packages/api/src", "packages/core/tests", "packages/api/tests"]
+
+# ----------------------------------------------------------------------------
+# pytest
+# ----------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["packages/core/tests", "packages/api/tests"]
+addopts = "-ra --strict-markers --strict-config"
+pythonpath = []
+
+[tool.coverage.run]
+branch = true
+source = ["silverfish_core", "silverfish_api"]
