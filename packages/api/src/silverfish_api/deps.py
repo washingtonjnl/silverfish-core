@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from silverfish_core.ports import MetadataRepository
+from silverfish_core.services.import_book import ImportBookService
 
 
 def get_repository(request: Request) -> MetadataRepository:
@@ -25,4 +26,14 @@ def get_repository(request: Request) -> MetadataRepository:
     return repo
 
 
+def get_import_service(request: Request) -> ImportBookService:
+    """Return the process-wide import service stored on the app state."""
+    service = request.app.state.import_service
+    if not isinstance(service, ImportBookService):
+        msg = "Import service is not configured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
+ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]

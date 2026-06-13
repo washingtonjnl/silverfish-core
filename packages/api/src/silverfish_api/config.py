@@ -11,6 +11,7 @@ API runs out of the box. Secrets (added later: SMTP, source tokens) belong in
 ``.env.local``, which is gitignored.
 """
 
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import Field
@@ -18,6 +19,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "SILVERFISH_"
 DEFAULT_LIBRARY_DIR = "silverfish-library"
+
+
+class StorageType(StrEnum):
+    """Where book files live. Only ``local`` is wired today; the others are
+    declared so the selection mechanism and config are ready for cloud backends.
+    """
+
+    LOCAL = "local"
+    GDRIVE = "gdrive"
+    S3 = "s3"
 
 
 class Settings(BaseSettings):
@@ -33,6 +44,7 @@ class Settings(BaseSettings):
     )
 
     library_dir: Path = Field(default=Path(DEFAULT_LIBRARY_DIR))
+    storage: StorageType = Field(default=StorageType.LOCAL)
 
     @property
     def metadata_db(self) -> Path:

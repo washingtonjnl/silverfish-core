@@ -15,7 +15,10 @@ from silverfish_api import __version__
 from silverfish_api.config import load_settings
 from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.routers import books
+from silverfish_api.storage_factory import build_storage
+from silverfish_core.adapters.extract_python import PythonMetadataExtractor
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
+from silverfish_core.services.import_book import ImportBookService
 
 
 class HealthResponse(BaseModel):
@@ -30,7 +33,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Build adapters on startup and dispose them on shutdown."""
     settings = load_settings()
     repository = SqliteCalibreRepository(db_path=settings.metadata_db)
+    storage = build_storage(settings)
+    import_service = ImportBookService(
+        extractor=PythonMetadataExtractor(),
+        repository=repository,
+        storage=storage,
+    )
     app.state.repository = repository
+    app.state.storage = storage
+    app.state.import_service = import_service
     try:
         yield
     finally:

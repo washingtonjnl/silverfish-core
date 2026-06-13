@@ -13,6 +13,14 @@ from silverfish_core.ports.types import BookMeta
 class MetadataExtractor(Protocol):
     """Read metadata (and cover) out of a book file."""
 
-    def extract(self, file_path: str, extension: str) -> BookMeta:
-        """Return the metadata extracted from *file_path* of type *extension*."""
+    def extract(
+        self, file_path: str, extension: str, *, fallback_title: str | None = None
+    ) -> BookMeta:
+        """Return the metadata extracted from *file_path* of type *extension*.
+
+        *fallback_title* is used as the title when none can be extracted (e.g. an
+        unsupported format). Callers pass the original upload name here so the
+        title never leaks an internal temp-file name. When omitted, the file
+        stem is used.
+        """
         ...

@@ -8,6 +8,7 @@ license = { text = "GPL-3.0-or-later" }
 dependencies = [
     "unidecode>=1.4",
     "sqlalchemy>=2.0",
+    "defusedxml>=0.7",
 ]
 
 [build-system]

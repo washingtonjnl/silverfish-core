@@ -17,6 +17,7 @@ dev = [
     "pytest-cov>=7.0",
     "httpx>=0.28",
     "pre-commit>=4.4",
+    "types-defusedxml>=0.7",
 ]
 
 [tool.uv.workspace]

@@ -88,8 +88,10 @@ class FakeInjector:
 
 
 class FakeExtractor:
-    def extract(self, file_path: str, extension: str) -> BookMeta:
-        return BookMeta(title="x", extension=extension)
+    def extract(
+        self, file_path: str, extension: str, *, fallback_title: str | None = None
+    ) -> BookMeta:
+        return BookMeta(title=fallback_title or "x", extension=extension)
 
 
 class FakeMailer:
