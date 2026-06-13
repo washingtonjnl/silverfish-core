@@ -9,6 +9,10 @@ columns here. Every service and adapter speaks in terms of these types.
 from dataclasses import dataclass, field
 from datetime import datetime
 
+# Rating scale stored by Calibre and enforced by the DB CHECK constraint.
+MIN_RATING = 0
+MAX_RATING = 10
+
 
 @dataclass(frozen=True, slots=True)
 class Author:
@@ -85,3 +89,11 @@ class Book:
     timestamp: datetime | None = None
     last_modified: datetime | None = None
     custom_fields: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Rating is a 0-10 scale (Calibre stores it the same way and the DB has a
+        # CHECK constraint). Reject out-of-range values here so no consumer can
+        # build a Book that would later blow up at the database layer.
+        if self.rating is not None and not (MIN_RATING <= self.rating <= MAX_RATING):
+            msg = f"rating must be between {MIN_RATING} and {MAX_RATING}, got {self.rating}"
+            raise ValueError(msg)

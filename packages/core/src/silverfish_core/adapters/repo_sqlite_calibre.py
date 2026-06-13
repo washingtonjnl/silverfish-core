@@ -12,8 +12,9 @@ import sqlite3
 import uuid as uuid_module
 from collections.abc import Sequence
 from pathlib import Path
+from typing import ClassVar
 
-from sqlalchemy import create_engine, event, func, select
+from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.orm import Session, selectinload
@@ -306,10 +307,90 @@ class SqliteCalibreRepository:
         return fetched
 
     def update_book(self, book: dm.Book) -> dm.Book:
-        raise NotImplementedError("update_book is implemented in the edit step")
+        """Update an existing book: fields, recomputed sort/author_sort, synced
+        M2M relationships (orphans removed) and recomputed path on author/title
+        change. Returns the updated book.
+        """
+        if book.id is None:
+            msg = "update_book requires a book with an id"
+            raise ValueError(msg)
+
+        resolved_authors = self._resolve_author_sorts(book.authors)
+        new_author_sort = book.author_sort or " & ".join(a.sort for a in resolved_authors)
+
+        with Session(self._engine) as session:
+            row = session.get(cs.Book, book.id)
+            if row is None:
+                msg = f"Book {book.id} does not exist"
+                raise ValueError(msg)
+
+            row.title = book.title
+            row.sort = title_sort(book.title)
+            row.author_sort = new_author_sort
+            row.series_index = book.series_index
+            row.has_cover = book.has_cover
+            row.path = build_path(
+                resolved_authors[0].name if resolved_authors else "Unknown",
+                book.title,
+                book_id=row.id,
+            )
+
+            old_authors = list(row.authors)
+            old_tags = list(row.tags)
+            old_series = list(row.series)
+            old_publishers = list(row.publishers)
+            old_ratings = list(row.ratings)
+
+            row.authors = [self._upsert_author(session, a) for a in resolved_authors]
+            row.tags = [self._upsert_tag(session, t.name) for t in book.tags]
+            row.series = (
+                [self._upsert_series(session, book.series)] if book.series is not None else []
+            )
+            row.languages = [self._upsert_language(session, code) for code in book.languages]
+            row.publishers = (
+                [self._upsert_publisher(session, book.publisher)] if book.publisher else []
+            )
+            row.ratings = (
+                [self._upsert_rating(session, book.rating)] if book.rating is not None else []
+            )
+
+            self._sync_comment(session, row.id, book.comment)
+            self._sync_identifiers(session, row.id, book.identifiers)
+
+            session.flush()
+            # Remove entities that no longer belong to any book.
+            self._prune_orphans(session, "books_authors_link", old_authors)
+            self._prune_orphans(session, "books_tags_link", old_tags)
+            self._prune_orphans(session, "books_series_link", old_series)
+            self._prune_orphans(session, "books_publishers_link", old_publishers)
+            self._prune_orphans(session, "books_ratings_link", old_ratings)
+
+            session.commit()
+            updated_id = row.id
+
+        fetched = self.get_book(updated_id)
+        if fetched is None:  # pragma: no cover - just-updated row must exist
+            msg = "Failed to read back the updated book"
+            raise RuntimeError(msg)
+        return fetched
 
     def delete_book(self, book_id: int) -> None:
-        raise NotImplementedError("delete_book is implemented in the edit step")
+        """Delete a book. Calibre's ``books_delete_trg`` cascades to the
+        link/data/comment tables, so we delete the books row directly with a
+        Core statement rather than letting the ORM manage child rows (which would
+        fight the trigger). A missing book is a no-op.
+        """
+        with Session(self._engine) as session:
+            if session.get(cs.Book, book_id) is None:
+                return
+            session.execute(text("DELETE FROM books WHERE id = :id"), {"id": book_id})
+            session.commit()
+
+    def book_dir(self, book_id: int) -> str | None:
+        """Return the library-relative directory of a book (``books.path``)."""
+        with Session(self._engine) as session:
+            row = session.get(cs.Book, book_id)
+            return row.path if row is not None else None
 
     # --- entity upserts (case-insensitive, reuse existing) ------------------
 
@@ -318,6 +399,56 @@ class SqliteCalibreRepository:
             a if a.sort else dm.Author(name=a.name, sort=author_sort(a.name), link=a.link)
             for a in authors
         ]
+
+    def _sync_comment(self, session: Session, book_id: int, text: str | None) -> None:
+        existing = session.scalars(select(cs.Comment).where(cs.Comment.book == book_id)).first()
+        if text:
+            if existing is not None:
+                existing.text = text
+            else:
+                session.add(cs.Comment(book=book_id, text=text))
+        elif existing is not None:
+            session.delete(existing)
+
+    def _sync_identifiers(
+        self, session: Session, book_id: int, identifiers: Sequence[dm.Identifier]
+    ) -> None:
+        for old in session.scalars(
+            select(cs.Identifier).where(cs.Identifier.book == book_id)
+        ).all():
+            session.delete(old)
+        for ident in identifiers:
+            session.add(cs.Identifier(book=book_id, type=ident.scheme.lower(), val=ident.value))
+
+    # link table -> column referencing the entity. A fixed allowlist: the only
+    # values ever passed to _prune_orphans, so the SQL built from them is not
+    # user-influenced (guards against accidental injection via this helper).
+    _LINK_TABLES: ClassVar[dict[str, str]] = {
+        "books_authors_link": "author",
+        "books_tags_link": "tag",
+        "books_series_link": "series",
+        "books_publishers_link": "publisher",
+        "books_ratings_link": "rating",
+    }
+
+    def _prune_orphans[E](
+        self,
+        session: Session,
+        link_table: str,
+        candidates: Sequence[E],
+    ) -> None:
+        """Delete each candidate entity no longer linked to any book.
+
+        *link_table* must be one of the known link tables; the query is built
+        only from that vetted constant, never from user input.
+        """
+        column = self._LINK_TABLES[link_table]
+        query = text(f"SELECT 1 FROM {link_table} WHERE {column} = :id LIMIT 1")  # noqa: S608 - table/column from vetted allowlist
+        for entity in candidates:
+            entity_id = entity.id  # type: ignore[attr-defined]  # all entities have an int id
+            still_used = session.execute(query, {"id": entity_id}).first()
+            if still_used is None:
+                session.delete(entity)
 
     def _upsert_author(self, session: Session, author: dm.Author) -> cs.Author:
         existing = session.scalars(

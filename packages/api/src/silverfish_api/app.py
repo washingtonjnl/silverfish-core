@@ -18,6 +18,7 @@ from silverfish_api.routers import books
 from silverfish_api.storage_factory import build_storage
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
+from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 
 
@@ -39,9 +40,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         repository=repository,
         storage=storage,
     )
+    edit_service = EditBookService(repository=repository, storage=storage)
     app.state.repository = repository
     app.state.storage = storage
     app.state.import_service = import_service
+    app.state.edit_service = edit_service
     try:
         yield
     finally:
