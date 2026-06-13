@@ -8,7 +8,7 @@ on startup and includes the routers. Domain behaviour lives in
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from silverfish_api import __version__
@@ -16,10 +16,18 @@ from silverfish_api.config import load_settings
 from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.routers import books
 from silverfish_api.storage_factory import build_storage
+from silverfish_core.adapters.calibre_binaries import CalibreBinaries
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
+
+
+class BinaryHealthOut(BaseModel):
+    """Availability of the Calibre binaries (optional system dependency)."""
+
+    convert_available: bool
+    metadata_available: bool
 
 
 class HealthResponse(BaseModel):
@@ -27,6 +35,7 @@ class HealthResponse(BaseModel):
 
     status: str
     version: str
+    binaries: BinaryHealthOut
 
 
 @asynccontextmanager
@@ -41,10 +50,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         storage=storage,
     )
     edit_service = EditBookService(repository=repository, storage=storage)
+    binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
     app.state.repository = repository
     app.state.storage = storage
     app.state.import_service = import_service
     app.state.edit_service = edit_service
+    app.state.binaries = binaries
     try:
         yield
     finally:
@@ -72,8 +83,17 @@ def create_app() -> FastAPI:
         tags=["system"],
         responses=ERROR_500,
     )
-    def health() -> HealthResponse:
-        return HealthResponse(status="ok", version=__version__)
+    def health(request: Request) -> HealthResponse:
+        binaries: CalibreBinaries = request.app.state.binaries
+        report = binaries.health()
+        return HealthResponse(
+            status="ok",
+            version=__version__,
+            binaries=BinaryHealthOut(
+                convert_available=report.convert_available,
+                metadata_available=report.metadata_available,
+            ),
+        )
 
     app.include_router(books.router)
 

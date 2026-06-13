@@ -18,12 +18,17 @@ def test_create_app_returns_fastapi_instance() -> None:
 
 
 def test_health_endpoint_returns_ok() -> None:
-    client = TestClient(create_app())
-    response = client.get("/health")
+    # `with` runs the lifespan, which builds app state (incl. binary discovery).
+    with TestClient(create_app()) as client:
+        response = client.get("/health")
     assert response.status_code == 200
-    # Version is derived from the git tag, so assert it matches the package's
-    # reported version rather than a hardcoded literal.
-    assert response.json() == {"status": "ok", "version": __version__}
+    body = response.json()
+    assert body["status"] == "ok"
+    # Version is derived from the git tag, not a hardcoded literal.
+    assert body["version"] == __version__
+    # Binary availability is reported so misconfiguration is visible.
+    assert "convert_available" in body["binaries"]
+    assert "metadata_available" in body["binaries"]
 
 
 def test_openapi_contract_is_generated() -> None:
