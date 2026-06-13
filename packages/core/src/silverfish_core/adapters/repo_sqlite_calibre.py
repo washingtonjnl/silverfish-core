@@ -1,20 +1,28 @@
-"""SQLite-Calibre implementation of the ``MetadataRepository`` port (read side).
+"""SQLite-Calibre implementation of the ``MetadataRepository`` port.
 
-Maps the real Calibre ``metadata.db`` schema to the neutral domain models. The
-rating stored in the DB is on the 0-10 scale, which is exactly the domain scale,
-so it maps across directly (no conversion). Consumers that want Calibre-desktop
-compatibility use this repository.
+Maps the real Calibre ``metadata.db`` schema to/from the neutral domain models.
+The rating stored in the DB is on the 0-10 scale, which is exactly the domain
+scale, so it maps across directly (no conversion). Writes compute sort keys,
+path and uuid the way Calibre does and reuse existing entities, so the resulting
+database is indistinguishable from one Calibre produced. Consumers that want
+Calibre-desktop compatibility use this repository.
 """
 
+import sqlite3
+import uuid as uuid_module
 from collections.abc import Sequence
 from pathlib import Path
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.pool import ConnectionPoolEntry
 from sqlalchemy.sql.selectable import Select
 
 from silverfish_core.adapters import _calibre_schema as cs
 from silverfish_core.domain import models as dm
+from silverfish_core.domain.rules import author_sort, build_path, title_sort
 from silverfish_core.ports.types import (
     Page,
     SearchFilters,
@@ -22,6 +30,32 @@ from silverfish_core.ports.types import (
     SortField,
     SortOrder,
 )
+
+
+def _register_calibre_functions(engine: Engine) -> None:
+    """Register the SQL functions Calibre's triggers rely on.
+
+    The ``books`` table has an insert trigger that calls ``title_sort(title)``
+    and ``uuid4()`` to fill ``sort`` and ``uuid``. A plain SQLite connection does
+    not know these, so inserts fail until we register them — matching what
+    Calibre itself does on its connection. We reuse our own ``title_sort`` rule
+    so the result is identical to ours.
+    """
+
+    @event.listens_for(engine, "connect")
+    def _on_connect(dbapi_connection: DBAPIConnection, _: ConnectionPoolEntry) -> None:
+        if isinstance(dbapi_connection, sqlite3.Connection):
+            dbapi_connection.create_function("title_sort", 1, _sql_title_sort)
+            dbapi_connection.create_function("uuid4", 0, _sql_uuid4)
+
+
+def _sql_title_sort(title: str | None) -> str:
+    return title_sort(title) if title else ""
+
+
+def _sql_uuid4() -> str:
+    return str(uuid_module.uuid4())
+
 
 _SORT_COLUMNS = {
     SortField.TITLE: cs.Book.sort,
@@ -38,8 +72,13 @@ class SqliteCalibreRepository:
     """Read book metadata from a Calibre ``metadata.db``."""
 
     def __init__(self, db_path: Path) -> None:
-        # Read-only intent for now; a single engine reused across calls.
+        self._db_path = db_path
         self._engine = create_engine(f"sqlite:///{db_path}")
+        _register_calibre_functions(self._engine)
+
+    @property
+    def db_path(self) -> Path:
+        return self._db_path
 
     def close(self) -> None:
         self._engine.dispose()
@@ -175,13 +214,136 @@ class SqliteCalibreRepository:
             page_size=page_size,
         )
 
-    # --- writes (implemented in a later step) -------------------------------
+    # --- writes -------------------------------------------------------------
 
     def create_book(self, book: dm.Book) -> dm.Book:
-        raise NotImplementedError("create_book is implemented in the write step")
+        """Insert a new book, computing Calibre-style sort/path/uuid and reusing
+        existing entities. Returns the book with its assigned id.
+        """
+        sort = book.sort or title_sort(book.title)
+        resolved_authors = self._resolve_author_sorts(book.authors)
+        book_author_sort = book.author_sort or " & ".join(a.sort for a in resolved_authors)
+
+        with Session(self._engine) as session:
+            row = cs.Book(
+                title=book.title,
+                sort=sort,
+                author_sort=book_author_sort,
+                series_index=book.series_index,
+                path="",  # set after we know the id
+                has_cover=book.has_cover,
+                uuid=book.uuid or str(uuid_module.uuid4()),
+            )
+            session.add(row)
+            session.flush()  # assign row.id
+
+            row.path = build_path(
+                resolved_authors[0].name if resolved_authors else "Unknown",
+                book.title,
+                book_id=row.id,
+            )
+
+            row.authors = [self._upsert_author(session, a) for a in resolved_authors]
+            row.tags = [self._upsert_tag(session, t.name) for t in book.tags]
+            if book.series is not None:
+                row.series = [self._upsert_series(session, book.series)]
+            row.languages = [self._upsert_language(session, code) for code in book.languages]
+            if book.publisher:
+                row.publishers = [self._upsert_publisher(session, book.publisher)]
+            if book.rating is not None:
+                row.ratings = [self._upsert_rating(session, book.rating)]
+
+            for fmt in book.formats:
+                session.add(
+                    cs.Data(
+                        book=row.id,
+                        format=fmt.extension.upper(),
+                        uncompressed_size=fmt.size_bytes,
+                        name=fmt.name,
+                    )
+                )
+            if book.comment:
+                session.add(cs.Comment(book=row.id, text=book.comment))
+            for ident in book.identifiers:
+                session.add(cs.Identifier(book=row.id, type=ident.scheme.lower(), val=ident.value))
+
+            session.commit()
+            new_id = row.id
+
+        fetched = self.get_book(new_id)
+        if fetched is None:  # pragma: no cover - just-created row must exist
+            msg = "Failed to read back the created book"
+            raise RuntimeError(msg)
+        return fetched
 
     def update_book(self, book: dm.Book) -> dm.Book:
-        raise NotImplementedError("update_book is implemented in the write step")
+        raise NotImplementedError("update_book is implemented in the edit step")
 
     def delete_book(self, book_id: int) -> None:
-        raise NotImplementedError("delete_book is implemented in the write step")
+        raise NotImplementedError("delete_book is implemented in the edit step")
+
+    # --- entity upserts (case-insensitive, reuse existing) ------------------
+
+    def _resolve_author_sorts(self, authors: Sequence[dm.Author]) -> list[dm.Author]:
+        return [
+            a if a.sort else dm.Author(name=a.name, sort=author_sort(a.name), link=a.link)
+            for a in authors
+        ]
+
+    def _upsert_author(self, session: Session, author: dm.Author) -> cs.Author:
+        existing = session.scalars(
+            select(cs.Author).where(func.lower(cs.Author.name) == author.name.lower())
+        ).first()
+        if existing is not None:
+            return existing
+        created = cs.Author(name=author.name, sort=author.sort or author_sort(author.name))
+        session.add(created)
+        return created
+
+    def _upsert_tag(self, session: Session, name: str) -> cs.Tag:
+        existing = session.scalars(
+            select(cs.Tag).where(func.lower(cs.Tag.name) == name.lower())
+        ).first()
+        if existing is not None:
+            return existing
+        created = cs.Tag(name=name)
+        session.add(created)
+        return created
+
+    def _upsert_series(self, session: Session, series: dm.Series) -> cs.Series:
+        existing = session.scalars(
+            select(cs.Series).where(func.lower(cs.Series.name) == series.name.lower())
+        ).first()
+        if existing is not None:
+            return existing
+        created = cs.Series(name=series.name, sort=series.sort or title_sort(series.name))
+        session.add(created)
+        return created
+
+    def _upsert_language(self, session: Session, code: str) -> cs.Language:
+        existing = session.scalars(
+            select(cs.Language).where(func.lower(cs.Language.lang_code) == code.lower())
+        ).first()
+        if existing is not None:
+            return existing
+        created = cs.Language(lang_code=code)
+        session.add(created)
+        return created
+
+    def _upsert_publisher(self, session: Session, name: str) -> cs.Publisher:
+        existing = session.scalars(
+            select(cs.Publisher).where(func.lower(cs.Publisher.name) == name.lower())
+        ).first()
+        if existing is not None:
+            return existing
+        created = cs.Publisher(name=name, sort=name)
+        session.add(created)
+        return created
+
+    def _upsert_rating(self, session: Session, rating: int) -> cs.Rating:
+        existing = session.scalars(select(cs.Rating).where(cs.Rating.rating == rating)).first()
+        if existing is not None:
+            return existing
+        created = cs.Rating(rating=rating)
+        session.add(created)
+        return created

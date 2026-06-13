@@ -1,11 +1,11 @@
-"""Read-side book endpoints: list, get and search."""
+"""Book endpoints: upload, list, get and search."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 
-from silverfish_api.deps import RepositoryDep
-from silverfish_api.errors import ERROR_404, ERROR_422, ERROR_500
+from silverfish_api.deps import ImportServiceDep, RepositoryDep
+from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500
 from silverfish_api.schemas import BookOut, BookPage
 from silverfish_core.domain.models import Book
 from silverfish_core.ports.types import (
@@ -15,13 +15,32 @@ from silverfish_core.ports.types import (
     SortField,
     SortOrder,
 )
+from silverfish_core.services.import_book import UploadedFile
 
 router = APIRouter(tags=["books"])
 
+# Formats accepted for upload (mirrors Calibre's common set).
+ALLOWED_UPLOAD_EXTENSIONS = (
+    "epub",
+    "kepub",
+    "mobi",
+    "azw",
+    "azw3",
+    "pdf",
+    "txt",
+    "fb2",
+    "cbz",
+    "cbr",
+    "cbt",
+    "cb7",
+    "djvu",
+)
+
 # Listings/search can fail validation (422) or unexpectedly (500), but never
-# 404; a by-id lookup adds 404.
+# 404; a by-id lookup adds 404. Upload adds 400 for a rejected file.
 _LIST_ERRORS = {**ERROR_422, **ERROR_500}
 _GET_ERRORS = {**ERROR_404, **ERROR_422, **ERROR_500}
+_UPLOAD_ERRORS = {**ERROR_400, **ERROR_422, **ERROR_500}
 
 PageParam = Annotated[int, Query(ge=1)]
 PageSizeParam = Annotated[int, Query(ge=1, le=200)]
@@ -37,6 +56,22 @@ def _to_page(page: Page[Book]) -> BookPage:
         has_next=page.has_next,
         has_prev=page.has_prev,
     )
+
+
+@router.post(
+    "/books",
+    response_model=BookOut,
+    status_code=status.HTTP_201_CREATED,
+    responses=_UPLOAD_ERRORS,
+)
+async def upload_book(file: UploadFile, import_service: ImportServiceDep) -> BookOut:
+    data = await file.read()
+    upload = UploadedFile(filename=file.filename or "upload", data=data)
+    try:
+        book = import_service.import_book(upload, allowed_extensions=ALLOWED_UPLOAD_EXTENSIONS)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return BookOut.from_domain(book)
 
 
 @router.get("/books", response_model=BookPage, responses=_LIST_ERRORS)
