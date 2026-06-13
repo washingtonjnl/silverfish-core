@@ -5,7 +5,9 @@ description = "Silverfish core library — domain rules, ports, services and ref
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-or-later" }
-dependencies = []
+dependencies = [
+    "unidecode>=1.4",
+]
 
 [build-system]
 requires = ["hatchling"]
