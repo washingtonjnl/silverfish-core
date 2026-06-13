@@ -91,6 +91,13 @@ files = ["packages/core/src", "packages/api/src", "packages/core/tests", "packag
 testpaths = ["packages/core/tests", "packages/api/tests"]
 addopts = "-ra --strict-markers --strict-config"
 pythonpath = []
+filterwarnings = [
+    "error",
+    # Starlette's TestClient still imports httpx in a way it now deprecates;
+    # it is third-party and out of our control. Tolerate just this one. The
+    # category is starlette's own StarletteDeprecationWarning, matched by message.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.coverage.run]
 branch = true
