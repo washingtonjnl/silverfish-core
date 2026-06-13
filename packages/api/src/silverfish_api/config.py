@@ -45,6 +45,10 @@ class Settings(BaseSettings):
 
     library_dir: Path = Field(default=Path(DEFAULT_LIBRARY_DIR))
     storage: StorageType = Field(default=StorageType.LOCAL)
+    # Optional explicit directory of the Calibre binaries (ebook-convert,
+    # ebook-meta). When unset, they are autodetected from the OS default
+    # locations; if still not found, conversion/binary metadata features degrade.
+    calibre_bin_dir: Path | None = Field(default=None)
 
     @property
     def metadata_db(self) -> Path:

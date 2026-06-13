@@ -16,7 +16,8 @@ from silverfish_api.config import Settings, load_settings
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SILVERFISH_LIBRARY_DIR", raising=False)
+    for key in ("SILVERFISH_LIBRARY_DIR", "SILVERFISH_STORAGE", "SILVERFISH_CALIBRE_BIN_DIR"):
+        monkeypatch.delenv(key, raising=False)
 
 
 def _write(path: Path, content: str) -> None:
@@ -55,6 +56,15 @@ class TestEnvVarPrecedence:
         monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", "/data/from-real-env")
         settings = load_settings(env_dir=tmp_path)
         assert settings.library_dir == Path("/data/from-real-env")
+
+
+class TestCalibreBinDir:
+    def test_defaults_to_none(self, tmp_path: Path) -> None:
+        assert load_settings(env_dir=tmp_path).calibre_bin_dir is None
+
+    def test_reads_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SILVERFISH_CALIBRE_BIN_DIR", "/opt/calibre")
+        assert load_settings(env_dir=tmp_path).calibre_bin_dir == Path("/opt/calibre")
 
 
 class TestType:
