@@ -10,6 +10,27 @@ from pydantic import BaseModel
 from silverfish_core.domain.models import Book
 
 
+class ErrorDetail(BaseModel):
+    """A single field-level validation problem."""
+
+    location: str
+    message: str
+
+
+class ErrorBody(BaseModel):
+    """The body of a standardized error."""
+
+    status: int
+    message: str
+    details: list[ErrorDetail] | None = None
+
+
+class ErrorResponse(BaseModel):
+    """Every error the API returns shares this shape: ``{"error": {...}}``."""
+
+    error: ErrorBody
+
+
 class AuthorOut(BaseModel):
     name: str
     sort: str

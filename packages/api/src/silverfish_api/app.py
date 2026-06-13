@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from silverfish_api import __version__
 from silverfish_api.config import load_settings
+from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.routers import books
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
 
@@ -49,7 +50,14 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    @app.get("/health", response_model=HealthResponse, tags=["system"])
+    register_error_handlers(app)
+
+    @app.get(
+        "/health",
+        response_model=HealthResponse,
+        tags=["system"],
+        responses=ERROR_500,
+    )
     def health() -> HealthResponse:
         return HealthResponse(status="ok", version=__version__)
 

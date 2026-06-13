@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 
 from silverfish_api.deps import RepositoryDep
+from silverfish_api.errors import ERROR_404, ERROR_422, ERROR_500
 from silverfish_api.schemas import BookOut, BookPage
 from silverfish_core.domain.models import Book
 from silverfish_core.ports.types import (
@@ -16,6 +17,11 @@ from silverfish_core.ports.types import (
 )
 
 router = APIRouter(tags=["books"])
+
+# Listings/search can fail validation (422) or unexpectedly (500), but never
+# 404; a by-id lookup adds 404.
+_LIST_ERRORS = {**ERROR_422, **ERROR_500}
+_GET_ERRORS = {**ERROR_404, **ERROR_422, **ERROR_500}
 
 PageParam = Annotated[int, Query(ge=1)]
 PageSizeParam = Annotated[int, Query(ge=1, le=200)]
@@ -33,7 +39,7 @@ def _to_page(page: Page[Book]) -> BookPage:
     )
 
 
-@router.get("/books", response_model=BookPage)
+@router.get("/books", response_model=BookPage, responses=_LIST_ERRORS)
 def list_books(
     repository: RepositoryDep,
     page: PageParam = 1,
@@ -49,7 +55,7 @@ def list_books(
     return _to_page(result)
 
 
-@router.get("/books/{book_id}", response_model=BookOut)
+@router.get("/books/{book_id}", response_model=BookOut, responses=_GET_ERRORS)
 def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
     book = repository.get_book(book_id)
     if book is None:
@@ -57,7 +63,7 @@ def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
     return BookOut.from_domain(book)
 
 
-@router.get("/search", response_model=BookPage)
+@router.get("/search", response_model=BookPage, responses=_LIST_ERRORS)
 def search_books(
     repository: RepositoryDep,
     q: str = "",
