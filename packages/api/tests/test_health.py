@@ -8,6 +8,7 @@ the scaffolding as green.
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from silverfish_api import __version__
 from silverfish_api.app import create_app
 
 
@@ -20,7 +21,9 @@ def test_health_endpoint_returns_ok() -> None:
     client = TestClient(create_app())
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.0.0"}
+    # Version is derived from the git tag, so assert it matches the package's
+    # reported version rather than a hardcoded literal.
+    assert response.json() == {"status": "ok", "version": __version__}
 
 
 def test_openapi_contract_is_generated() -> None:

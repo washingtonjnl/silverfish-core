@@ -1,6 +1,6 @@
 [project]
 name = "silverfish-core"
-version = "0.0.0"
+dynamic = ["version"]
 description = "Silverfish core library — domain rules, ports, services and reference adapters for an ebook library"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,8 +11,19 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+# Version is derived from git tags (vX.Y.Z), not stored in this file, so
+# concurrent feature PRs never conflict on a version line. Between releases the
+# version reads like "0.1.0.postN+g<sha>"; tagging produces the clean number.
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/silverfish_core"]

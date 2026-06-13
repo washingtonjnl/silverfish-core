@@ -6,4 +6,9 @@ web nor concrete-persistence code at its boundary: those are plugged in via
 adapters by whoever consumes the core.
 """
 
-__version__ = "0.0.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("silverfish-core")
+except PackageNotFoundError:  # pragma: no cover - only when not installed
+    __version__ = "0.0.0"
