@@ -1,6 +1,6 @@
 [project]
 name = "silverfish-api"
-version = "0.0.0"
+dynamic = ["version"]
 description = "Silverfish API — thin FastAPI layer exposing the core over HTTP, generating the OpenAPI contract"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,8 +13,18 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+# Version derived from git tags (see core pyproject for rationale). core and api
+# share the same tag, so they stay in lockstep.
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/silverfish_api"]
