@@ -53,6 +53,8 @@ class IdentifierOut(BaseModel):
 class FormatOut(BaseModel):
     extension: str
     size_bytes: int
+    # Ready-to-use URL to download this specific format.
+    download_url: str
 
 
 class BookOut(BaseModel):
@@ -71,11 +73,14 @@ class BookOut(BaseModel):
     identifiers: list[IdentifierOut]
     formats: list[FormatOut]
     has_cover: bool
+    # URL to fetch the cover image, present only when the book has one.
+    cover_url: str | None
 
     @classmethod
     def from_domain(cls, book: Book) -> "BookOut":
+        book_id = book.id if book.id is not None else 0
         return cls(
-            id=book.id if book.id is not None else 0,
+            id=book_id,
             title=book.title,
             sort=book.sort,
             author_sort=book.author_sort,
@@ -91,9 +96,15 @@ class BookOut(BaseModel):
             publisher=book.publisher,
             identifiers=[IdentifierOut(scheme=i.scheme, value=i.value) for i in book.identifiers],
             formats=[
-                FormatOut(extension=f.extension, size_bytes=f.size_bytes) for f in book.formats
+                FormatOut(
+                    extension=f.extension,
+                    size_bytes=f.size_bytes,
+                    download_url=f"/books/{book_id}/formats/{f.extension.lower()}",
+                )
+                for f in book.formats
             ],
             has_cover=book.has_cover,
+            cover_url=f"/books/{book_id}/cover" if book.has_cover else None,
         )
 
 

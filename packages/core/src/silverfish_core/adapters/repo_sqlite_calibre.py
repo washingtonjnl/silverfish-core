@@ -166,6 +166,35 @@ class SqliteCalibreRepository:
             rows = session.scalars(stmt).all()
             return self._page(rows, total, page, page_size)
 
+    # --- file locations (library-relative; never exposed via the API) -------
+
+    def cover_path(self, book_id: int) -> str | None:
+        """Return the library-relative path to a book's cover, or ``None``.
+
+        ``None`` when the book does not exist or has no cover.
+        """
+        with Session(self._engine) as session:
+            row = session.get(cs.Book, book_id)
+            if row is None or not row.has_cover:
+                return None
+            return f"{row.path}/cover.jpg"
+
+    def format_path(self, book_id: int, book_format: str) -> str | None:
+        """Return the library-relative path to a book's file in *book_format*.
+
+        ``None`` when the book or that format does not exist. Format match is
+        case-insensitive.
+        """
+        with Session(self._engine) as session:
+            row = session.get(cs.Book, book_id)
+            if row is None:
+                return None
+            wanted = book_format.upper()
+            for data in row.data:
+                if data.format.upper() == wanted:
+                    return f"{row.path}/{data.name}.{data.format.lower()}"
+            return None
+
     # --- query helpers ------------------------------------------------------
 
     def _apply_term[R](self, stmt: Select[tuple[R]], term: str) -> Select[tuple[R]]:

@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from silverfish_core.ports import MetadataRepository
+from silverfish_core.ports import FileStorage, MetadataRepository
 from silverfish_core.services.import_book import ImportBookService
 
 
@@ -35,5 +35,15 @@ def get_import_service(request: Request) -> ImportBookService:
     return service
 
 
+def get_storage(request: Request) -> FileStorage:
+    """Return the process-wide file storage stored on the app state."""
+    storage = request.app.state.storage
+    if not isinstance(storage, FileStorage):
+        msg = "Storage is not configured on the application state"
+        raise RuntimeError(msg)
+    return storage
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
+StorageDep = Annotated[FileStorage, Depends(get_storage)]
