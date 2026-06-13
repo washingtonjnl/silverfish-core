@@ -5,7 +5,7 @@ determines the quality of the generated OpenAPI and therefore the SDKs. They are
 plain DTOs mapped from the neutral domain models.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from silverfish_core.domain.models import Book
 
@@ -106,6 +106,24 @@ class BookOut(BaseModel):
             has_cover=book.has_cover,
             cover_url=f"/books/{book_id}/cover" if book.has_cover else None,
         )
+
+
+class BookUpdate(BaseModel):
+    """A partial book metadata update. Only provided fields are changed.
+
+    ``model_fields_set`` distinguishes "field omitted" from "field set to null",
+    so callers can clear a value (e.g. ``rating: null``) deliberately.
+    """
+
+    title: str | None = None
+    authors: list[str] | None = None
+    tags: list[str] | None = None
+    series: str | None = None
+    series_index: float | None = None
+    rating: int | None = Field(default=None, ge=0, le=10)
+    languages: list[str] | None = None
+    publisher: str | None = None
+    comment: str | None = None
 
 
 class BookPage(BaseModel):

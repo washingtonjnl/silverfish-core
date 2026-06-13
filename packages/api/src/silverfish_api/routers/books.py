@@ -1,13 +1,19 @@
 """Book endpoints: upload, list, get and search."""
 
+import dataclasses
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 
-from silverfish_api.deps import ImportServiceDep, RepositoryDep, StorageDep
+from silverfish_api.deps import (
+    EditServiceDep,
+    ImportServiceDep,
+    RepositoryDep,
+    StorageDep,
+)
 from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500
-from silverfish_api.schemas import BookOut, BookPage
-from silverfish_core.domain.models import Book
+from silverfish_api.schemas import BookOut, BookPage, BookUpdate
+from silverfish_core.domain.models import Author, Book, Series, Tag
 from silverfish_core.ports import FileStorage
 from silverfish_core.ports.types import (
     Page,
@@ -55,6 +61,8 @@ ALLOWED_UPLOAD_EXTENSIONS = (
 _LIST_ERRORS = {**ERROR_422, **ERROR_500}
 _GET_ERRORS = {**ERROR_404, **ERROR_422, **ERROR_500}
 _UPLOAD_ERRORS = {**ERROR_400, **ERROR_422, **ERROR_500}
+# PATCH can 404 (missing book), 400 (empty patch) or 422 (bad field types).
+_PATCH_ERRORS = {**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_500}
 
 PageParam = Annotated[int, Query(ge=1)]
 PageSizeParam = Annotated[int, Query(ge=1, le=200)]
@@ -110,6 +118,68 @@ def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
     return BookOut.from_domain(book)
+
+
+@router.patch("/books/{book_id}", response_model=BookOut, responses=_PATCH_ERRORS)
+def update_book(
+    book_id: int, patch: BookUpdate, repository: RepositoryDep, edit_service: EditServiceDep
+) -> BookOut:
+    if not patch.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one field must be provided to update",
+        )
+    current = repository.get_book(book_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    try:
+        merged = _apply_update(current, patch)
+        updated = edit_service.edit_book(merged)
+    except ValueError as exc:
+        # A domain rule was violated (e.g. rating out of range) — a bad request,
+        # never a 500.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return BookOut.from_domain(updated)
+
+
+@router.delete(
+    "/books/{book_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**ERROR_404, **ERROR_500},
+)
+def delete_book(book_id: int, repository: RepositoryDep, edit_service: EditServiceDep) -> Response:
+    if repository.get_book(book_id) is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    edit_service.delete_book(book_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _apply_update(book: Book, patch: BookUpdate) -> Book:
+    """Merge a partial update onto *book*. Only fields explicitly set on the
+    patch are changed (so omitting a field leaves it untouched).
+    """
+    changes: dict[str, object] = {}
+    fields = patch.model_fields_set
+    if "title" in fields and patch.title is not None:
+        changes["title"] = patch.title
+    if "authors" in fields and patch.authors is not None:
+        changes["authors"] = tuple(Author(name=n, sort="") for n in patch.authors)
+        changes["author_sort"] = ""  # repository recomputes
+    if "tags" in fields and patch.tags is not None:
+        changes["tags"] = tuple(Tag(name=t) for t in patch.tags)
+    if "series" in fields:
+        changes["series"] = Series(name=patch.series, sort=patch.series) if patch.series else None
+    if "series_index" in fields and patch.series_index is not None:
+        changes["series_index"] = patch.series_index
+    if "rating" in fields:
+        changes["rating"] = patch.rating
+    if "languages" in fields and patch.languages is not None:
+        changes["languages"] = tuple(patch.languages)
+    if "publisher" in fields:
+        changes["publisher"] = patch.publisher
+    if "comment" in fields:
+        changes["comment"] = patch.comment
+    return dataclasses.replace(book, **changes)  # type: ignore[arg-type]  # validated field names
 
 
 @router.get(

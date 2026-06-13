@@ -52,3 +52,10 @@ class MetadataRepository(Protocol):
         or ``None`` if absent. Format match is case-insensitive.
         """
         ...
+
+    def book_dir(self, book_id: int) -> str | None:
+        """Return the storage-relative directory of a book, or ``None``.
+
+        Used to relocate files when a rename changes the computed path.
+        """
+        ...

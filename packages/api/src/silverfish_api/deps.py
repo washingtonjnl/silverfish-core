@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from silverfish_core.ports import FileStorage, MetadataRepository
+from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 
 
@@ -44,6 +45,16 @@ def get_storage(request: Request) -> FileStorage:
     return storage
 
 
+def get_edit_service(request: Request) -> EditBookService:
+    """Return the process-wide edit service stored on the app state."""
+    service = request.app.state.edit_service
+    if not isinstance(service, EditBookService):
+        msg = "Edit service is not configured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
+EditServiceDep = Annotated[EditBookService, Depends(get_edit_service)]

@@ -57,6 +57,9 @@ class FakeRepository:
     def format_path(self, book_id: int, book_format: str) -> str | None:
         raise NotImplementedError
 
+    def book_dir(self, book_id: int) -> str | None:
+        raise NotImplementedError
+
 
 class FakeStorage:
     def __init__(self) -> None:

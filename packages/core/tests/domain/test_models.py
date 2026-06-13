@@ -102,3 +102,13 @@ class TestBook:
         # Neutral domain uses a 0-10 integer; no Calibre x2 leakage here.
         book = dataclasses.replace(self._minimal_book(), rating=10)
         assert book.rating == 10
+
+    @pytest.mark.parametrize("bad", [-1, 11, 123, -100])
+    def test_rating_out_of_range_rejected(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="rating must be between"):
+            dataclasses.replace(self._minimal_book(), rating=bad)
+
+    @pytest.mark.parametrize("ok", [0, 5, 10, None])
+    def test_rating_in_range_or_none_accepted(self, ok: int | None) -> None:
+        book = dataclasses.replace(self._minimal_book(), rating=ok)
+        assert book.rating == ok
