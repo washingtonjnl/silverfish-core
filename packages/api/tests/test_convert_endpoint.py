@@ -85,6 +85,28 @@ class TestConvert:
         )
         assert response.status_code == 404
 
+    def test_409_when_target_format_already_exists(self, client: TestClient) -> None:
+        # Book 1 already has EPUB; converting to EPUB is a no-op conflict.
+        response = client.post(
+            "/books/1/convert", json={"source_format": "EPUB", "target_format": "EPUB"}
+        )
+        assert response.status_code == 409
+        assert response.json()["error"]["status"] == 409
+
+    def test_409_when_same_conversion_already_in_progress(self, client: TestClient) -> None:
+        # Fire two identical conversions fast; the first is still queued/running
+        # when the second arrives, so the second is a 409 (no duplicate job).
+        first = client.post(
+            "/books/1/convert", json={"source_format": "EPUB", "target_format": "AZW3"}
+        )
+        second = client.post(
+            "/books/1/convert", json={"source_format": "EPUB", "target_format": "AZW3"}
+        )
+        assert first.status_code == 202
+        # The second is rejected as a duplicate (or, if the first already
+        # finished, it would 409 because AZW3 now exists — both are 409).
+        assert second.status_code == 409
+
 
 class TestJobStatus:
     def test_unknown_job_is_404(self, client: TestClient) -> None:

@@ -52,3 +52,22 @@ class TestFormatPath:
 
     def test_format_path_none_for_missing_book(self, repo: SqliteCalibreRepository) -> None:
         assert repo.format_path(999999, "EPUB") is None
+
+
+class TestRemoveFormat:
+    def test_removes_data_row(self, repo: SqliteCalibreRepository) -> None:
+        assert repo.format_path(1, "EPUB") is not None
+        repo.remove_format(1, "EPUB")
+        assert repo.format_path(1, "EPUB") is None
+
+    def test_is_case_insensitive(self, repo: SqliteCalibreRepository) -> None:
+        repo.remove_format(1, "epub")
+        assert repo.format_path(1, "EPUB") is None
+
+    def test_missing_format_is_noop(self, repo: SqliteCalibreRepository) -> None:
+        repo.remove_format(1, "MOBI")  # must not raise
+
+    def test_other_formats_untouched(self, repo: SqliteCalibreRepository) -> None:
+        # Removing a format the book doesn't have leaves its EPUB intact.
+        repo.remove_format(1, "PDF")
+        assert repo.format_path(1, "EPUB") is not None

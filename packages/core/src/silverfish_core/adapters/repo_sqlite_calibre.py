@@ -408,6 +408,20 @@ class SqliteCalibreRepository:
                 )
             session.commit()
 
+    def remove_format(self, book_id: int, book_format: str) -> None:
+        """Delete a book's ``data`` row for *book_format* (case-insensitive).
+
+        A format the book does not have is a no-op.
+        """
+        fmt = book_format.upper()
+        with Session(self._engine) as session:
+            row = session.scalars(
+                select(cs.Data).where(cs.Data.book == book_id, func.upper(cs.Data.format) == fmt)
+            ).first()
+            if row is not None:
+                session.delete(row)
+                session.commit()
+
     # --- entity upserts (case-insensitive, reuse existing) ------------------
 
     def _resolve_author_sorts(self, authors: Sequence[dm.Author]) -> list[dm.Author]:

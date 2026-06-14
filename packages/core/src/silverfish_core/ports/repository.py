@@ -63,3 +63,7 @@ class MetadataRepository(Protocol):
     def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
         """Register a new format file for a book (a ``data`` row)."""
         ...
+
+    def remove_format(self, book_id: int, book_format: str) -> None:
+        """Remove a book's format record (a ``data`` row). Case-insensitive."""
+        ...

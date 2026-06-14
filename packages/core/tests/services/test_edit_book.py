@@ -19,6 +19,8 @@ class FakeRepository:
         self.books: dict[int, Book] = {}
         self.dirs: dict[int, str] = {}
         self.deleted: list[int] = []
+        self.formats: dict[tuple[int, str], str] = {}
+        self.removed_formats: list[tuple[int, str]] = []
 
     def add(self, book: Book, directory: str) -> None:
         assert book.id is not None
@@ -43,6 +45,16 @@ class FakeRepository:
     def book_dir(self, book_id: int) -> str | None:
         return self.dirs.get(book_id)
 
+    def add_format_file(self, book_id: int, book_format: str, path: str) -> None:
+        self.formats[(book_id, book_format.upper())] = path
+
+    def format_path(self, book_id: int, book_format: str) -> str | None:
+        return self.formats.get((book_id, book_format.upper()))
+
+    def remove_format(self, book_id: int, book_format: str) -> None:
+        self.removed_formats.append((book_id, book_format.upper()))
+        self.formats.pop((book_id, book_format.upper()), None)
+
     # Unused by the edit service.
     def list_books(self, *, page: int, page_size: int, sort: SortOrder) -> Page[Book]:
         raise NotImplementedError
@@ -54,9 +66,6 @@ class FakeRepository:
         raise NotImplementedError
 
     def cover_path(self, book_id: int) -> str | None:
-        raise NotImplementedError
-
-    def format_path(self, book_id: int, book_format: str) -> str | None:
         raise NotImplementedError
 
     def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
@@ -144,4 +153,27 @@ class TestDelete:
     def test_delete_missing_book_is_noop(self) -> None:
         service, _, storage = _service()
         service.delete_book(999)  # must not raise
+        assert storage.deleted == []
+
+
+class TestDeleteFormat:
+    def test_removes_file_and_data_row(self) -> None:
+        service, repo, storage = _service()
+        repo.add(_book(1), "Jane Austen/Old Title (1)")
+        repo.add_format_file(1, "EPUB", "Jane Austen/Old Title (1)/Book.epub")
+
+        removed = service.delete_format(1, "EPUB")
+
+        assert removed is True
+        assert repo.removed_formats == [(1, "EPUB")]
+        assert storage.deleted == ["Jane Austen/Old Title (1)/Book.epub"]
+
+    def test_returns_false_when_format_absent(self) -> None:
+        service, repo, storage = _service()
+        repo.add(_book(1), "Jane Austen/Old Title (1)")
+
+        removed = service.delete_format(1, "MOBI")
+
+        assert removed is False
+        assert repo.removed_formats == []
         assert storage.deleted == []

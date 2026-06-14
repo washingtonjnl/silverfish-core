@@ -21,11 +21,12 @@ class Converter(Protocol):
         *,
         opf: bytes | None = None,
         cover: bytes | None = None,
-        on_progress: Callable[[float], None] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> ConversionResult:
         """Convert *input_path* into *output_path*.
 
         *opf* and *cover*, when given, are embedded into the output. *on_progress*
-        receives a 0.0-1.0 fraction as conversion proceeds.
+        receives ``(fraction, message)`` as conversion proceeds, where *message*
+        describes the current step.
         """
         ...

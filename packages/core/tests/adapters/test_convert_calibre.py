@@ -6,6 +6,7 @@ is covered with a fake runner; a real end-to-end conversion runs only when the
 binary is installed (skipped otherwise so CI without Calibre still passes).
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -30,8 +31,13 @@ class FakeRunner:
         *,
         timeout: float = 600.0,
         env: dict[str, str] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> ProcessResult:
         self.calls.append(argv)
+        # Feed the captured stdout line-by-line, mimicking live streaming.
+        if on_line is not None:
+            for line in self._result.stdout.splitlines():
+                on_line(line)
         return self._result
 
 
@@ -68,10 +74,22 @@ class TestCommand:
 class TestProgressAndErrors:
     def test_progress_callback_receives_percentages(self) -> None:
         runner = FakeRunner(stdout="10% Parsing\n55% Converting\n100% Done")
-        seen: list[float] = []
-        _converter(runner).convert("in.epub", "out.pdf", on_progress=seen.append)
-        assert 0.1 in seen
-        assert 1.0 in seen
+        seen: list[tuple[float, str]] = []
+        _converter(runner).convert(
+            "in.epub", "out.pdf", on_progress=lambda f, m: seen.append((f, m))
+        )
+        fractions = [f for f, _ in seen]
+        assert 0.1 in fractions
+        assert 1.0 in fractions
+
+    def test_progress_callback_receives_descriptive_message(self) -> None:
+        # The text after the percentage is passed as the message.
+        runner = FakeRunner(stdout="34% Running transforms on e-book...")
+        seen: list[tuple[float, str]] = []
+        _converter(runner).convert(
+            "in.epub", "out.pdf", on_progress=lambda f, m: seen.append((f, m))
+        )
+        assert (0.34, "Running transforms on e-book...") in seen
 
     def test_nonzero_return_is_failure(self) -> None:
         runner = FakeRunner(returncode=1, stderr="Calibre failed with error: boom")

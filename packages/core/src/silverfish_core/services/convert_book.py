@@ -36,7 +36,7 @@ class ConvertBookService:
         book_id: int,
         source_format: str,
         target_format: str,
-        on_progress: Callable[[float], None] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> ConversionResult:
         source_rel = self._repository.format_path(book_id, source_format)
         if source_rel is None:

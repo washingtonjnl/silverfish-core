@@ -77,8 +77,28 @@ class TestDownload:
         assert ".epub" in disposition
 
 
+class TestDeleteFormat:
+    def test_deletes_format_file_and_record(self, client: TestClient, library: Path) -> None:
+        epub = library / "Jane Austen" / "The Great Book (1)" / "The Great Book - Jane Austen.epub"
+        assert epub.exists()
+
+        response = client.delete("/books/1/formats/epub")
+        assert response.status_code == 204
+        assert not epub.exists()
+        # The format no longer downloads, but the book still exists.
+        assert client.get("/books/1/formats/epub").status_code == 404
+        assert client.get("/books/1").status_code == 200
+
+    def test_404_for_missing_format(self, client: TestClient) -> None:
+        assert client.delete("/books/1/formats/mobi").status_code == 404
+
+    def test_404_for_missing_book(self, client: TestClient) -> None:
+        assert client.delete("/books/999999/formats/epub").status_code == 404
+
+
 class TestOpenAPI:
     def test_endpoints_documented(self, client: TestClient) -> None:
         schema = client.get("/openapi.json").json()
         assert "/books/{book_id}/cover" in schema["paths"]
         assert "/books/{book_id}/formats/{book_format}" in schema["paths"]
+        assert "delete" in schema["paths"]["/books/{book_id}/formats/{book_format}"]

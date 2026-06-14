@@ -7,7 +7,6 @@ uploaded bytes to a temp file so the extractor (which reads a path) can parse
 them; that temp file is always cleaned up.
 """
 
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +16,7 @@ from silverfish_core.ports.extractor import MetadataExtractor
 from silverfish_core.ports.repository import MetadataRepository
 from silverfish_core.ports.storage import FileStorage
 from silverfish_core.ports.types import BookMeta
+from silverfish_core.services.spill import spill_named
 
 _UNKNOWN_AUTHOR = "Unknown"
 
@@ -73,19 +73,12 @@ class ImportBookService:
         return created
 
     def _extract(self, upload: UploadedFile, extension: str) -> BookMeta:
-        """Spill the upload to a temp file so the path-based extractor can read
-        it, then always remove the temp file.
+        """Spill the upload to a temp file (named after the original upload) so
+        the path-based extractor reads a real name, never a temp name.
         """
-        # Title to use if the format has no parser: the *original* upload name,
-        # never the temp-file name.
         original_stem = Path(upload.filename).stem
-        with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp:
-            tmp.write(upload.data)
-            tmp_path = tmp.name
-        try:
-            return self._extractor.extract(tmp_path, extension, fallback_title=original_stem)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+        with spill_named(upload.data, base_name=original_stem, suffix=extension) as tmp_path:
+            return self._extractor.extract(str(tmp_path), extension, fallback_title=original_stem)
 
     def _build_book(self, meta: BookMeta, *, size: int) -> Book:
         authors = tuple(Author(name=name, sort=author_sort(name)) for name in meta.authors)
