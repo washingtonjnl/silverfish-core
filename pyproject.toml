@@ -58,9 +58,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests may use asserts, don't need return-type annotations, and build small
-# SQL strings from hardcoded table names to inspect the DB (no user input).
-"**/tests/**" = ["S101", "ANN201", "ANN001", "S608"]
+# Tests may use asserts, don't need return-type annotations, build small SQL
+# strings from hardcoded table names (no user input), and use dummy credentials.
+"**/tests/**" = ["S101", "ANN201", "ANN001", "S608", "S105", "S106"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

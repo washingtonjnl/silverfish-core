@@ -141,6 +141,35 @@ class RefreshRequest(BaseModel):
     source_format: str
 
 
+class SendRequest(BaseModel):
+    """Request to send a book to an e-reader email address."""
+
+    to_email: str
+    # Optional: overrides the default format preference. Must be a format the
+    # book actually has, otherwise the request is rejected.
+    format: str | None = None
+
+
+class EmailConfigOut(BaseModel):
+    """Non-secret view of the email configuration (never includes the password).
+
+    Whether sending is *available* is reported by ``/health`` (``send_available``);
+    this is the detail view for a settings screen.
+    """
+
+    configured: bool
+    host: str
+    port: int
+    from_address: str
+    security: str
+
+
+class EmailTestRequest(BaseModel):
+    """Request to send a connectivity test email."""
+
+    to_email: str
+
+
 class JobOut(BaseModel):
     """A background job's observable state."""
 
