@@ -9,7 +9,9 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.ports import FileStorage, MetadataRepository
+from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 
@@ -54,7 +56,27 @@ def get_edit_service(request: Request) -> EditBookService:
     return service
 
 
+def get_job_queue(request: Request) -> JobQueue:
+    """Return the process-wide job queue stored on the app state."""
+    queue = request.app.state.job_queue
+    if not isinstance(queue, JobQueue):
+        msg = "Job queue is not configured on the application state"
+        raise RuntimeError(msg)
+    return queue
+
+
+def get_convert_service(request: Request) -> ConvertBookService | None:
+    """Return the convert service, or ``None`` when ebook-convert is absent."""
+    service = request.app.state.convert_service
+    if service is not None and not isinstance(service, ConvertBookService):
+        msg = "Convert service is misconfigured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
 EditServiceDep = Annotated[EditBookService, Depends(get_edit_service)]
+JobQueueDep = Annotated[JobQueue, Depends(get_job_queue)]
+ConvertServiceDep = Annotated[ConvertBookService | None, Depends(get_convert_service)]

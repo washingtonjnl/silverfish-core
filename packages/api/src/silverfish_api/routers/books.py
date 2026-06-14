@@ -6,14 +6,17 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 
 from silverfish_api.deps import (
+    ConvertServiceDep,
     EditServiceDep,
     ImportServiceDep,
+    JobQueueDep,
     RepositoryDep,
     StorageDep,
 )
-from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500
-from silverfish_api.schemas import BookOut, BookPage, BookUpdate
+from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500, ERROR_503
+from silverfish_api.schemas import BookOut, BookPage, BookUpdate, ConvertRequest, JobOut
 from silverfish_core.domain.models import Author, Book, Series, Tag
+from silverfish_core.jobs.queue import ProgressCallback
 from silverfish_core.ports import FileStorage
 from silverfish_core.ports.types import (
     Page,
@@ -212,6 +215,46 @@ def download_book_format(
         content=data,
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post(
+    "/books/{book_id}/convert",
+    response_model=JobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**ERROR_404, **ERROR_422, **ERROR_503, **ERROR_500},
+)
+def convert_book(
+    book_id: int,
+    request: ConvertRequest,
+    repository: RepositoryDep,
+    convert_service: ConvertServiceDep,
+    job_queue: JobQueueDep,
+) -> JobOut:
+    if repository.get_book(book_id) is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if convert_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Conversion is unavailable: ebook-convert is not installed",
+        )
+
+    service = convert_service
+
+    def work(report: ProgressCallback) -> None:
+        service.convert_book(
+            book_id=book_id,
+            source_format=request.source_format,
+            target_format=request.target_format,
+            on_progress=report,
+        )
+
+    job_id = job_queue.submit("convert", work)
+    job = job_queue.get(job_id)
+    if job is None:  # pragma: no cover - just submitted
+        raise HTTPException(status_code=500, detail="Failed to enqueue job")
+    return JobOut(
+        id=job.id, type=job.type, status=job.status, progress=job.progress, error=job.error
     )
 
 

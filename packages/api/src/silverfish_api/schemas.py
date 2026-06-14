@@ -126,6 +126,23 @@ class BookUpdate(BaseModel):
     comment: str | None = None
 
 
+class ConvertRequest(BaseModel):
+    """Request to convert a book from one format to another."""
+
+    source_format: str
+    target_format: str
+
+
+class JobOut(BaseModel):
+    """A background job's observable state."""
+
+    id: str
+    type: str
+    status: str
+    progress: float
+    error: str | None = None
+
+
 class BookPage(BaseModel):
     """A paginated page of books."""
 

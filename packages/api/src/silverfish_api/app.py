@@ -14,11 +14,14 @@ from pydantic import BaseModel
 from silverfish_api import __version__
 from silverfish_api.config import load_settings
 from silverfish_api.errors import ERROR_500, register_error_handlers
-from silverfish_api.routers import books
+from silverfish_api.routers import books, jobs
 from silverfish_api.storage_factory import build_storage
 from silverfish_core.adapters.calibre_binaries import CalibreBinaries
+from silverfish_core.adapters.convert_calibre import CalibreConverter
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
+from silverfish_core.jobs.queue import JobQueue
+from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 
@@ -51,14 +54,30 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     edit_service = EditBookService(repository=repository, storage=storage)
     binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
+
+    job_queue = JobQueue()
+    job_queue.start()
+    convert_service = (
+        ConvertBookService(
+            repository=repository,
+            storage=storage,
+            converter=CalibreConverter(ebook_convert=binaries.ebook_convert),
+        )
+        if binaries.ebook_convert is not None
+        else None
+    )
+
     app.state.repository = repository
     app.state.storage = storage
     app.state.import_service = import_service
     app.state.edit_service = edit_service
     app.state.binaries = binaries
+    app.state.job_queue = job_queue
+    app.state.convert_service = convert_service
     try:
         yield
     finally:
+        job_queue.stop()
         repository.close()
 
 
@@ -96,5 +115,6 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(books.router)
+    app.include_router(jobs.router)
 
     return app

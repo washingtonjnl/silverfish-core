@@ -17,6 +17,7 @@ HTTP_400_BAD_REQUEST = 400
 HTTP_404_NOT_FOUND = 404
 HTTP_422_VALIDATION = 422
 HTTP_500_INTERNAL = 500
+HTTP_503_UNAVAILABLE = 503
 
 # Documented error responses, ready to spread into route decorators.
 ERROR_500: dict[int | str, dict[str, object]] = {
@@ -30,6 +31,9 @@ ERROR_422: dict[int | str, dict[str, object]] = {
 }
 ERROR_400: dict[int | str, dict[str, object]] = {
     HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Bad request"},
+}
+ERROR_503: dict[int | str, dict[str, object]] = {
+    HTTP_503_UNAVAILABLE: {"model": ErrorResponse, "description": "Service unavailable"},
 }
 
 
