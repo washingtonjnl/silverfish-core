@@ -10,11 +10,12 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from silverfish_core.jobs.queue import JobQueue
-from silverfish_core.ports import FileStorage, MetadataRepository
+from silverfish_core.ports import FileStorage, Mailer, MetadataRepository
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
+from silverfish_core.services.send_to_ereader import SendToEreaderService
 
 
 def get_repository(request: Request) -> MetadataRepository:
@@ -84,6 +85,24 @@ def get_refresh_service(request: Request) -> RefreshMetadataService:
     return service
 
 
+def get_send_service(request: Request) -> SendToEreaderService | None:
+    """Return the send-to-ereader service, or ``None`` when SMTP is unconfigured."""
+    service = request.app.state.send_service
+    if service is not None and not isinstance(service, SendToEreaderService):
+        msg = "Send service is misconfigured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
+def get_mailer(request: Request) -> Mailer | None:
+    """Return the mailer, or ``None`` when SMTP is unconfigured."""
+    mailer = request.app.state.mailer
+    if mailer is not None and not isinstance(mailer, Mailer):
+        msg = "Mailer is misconfigured on the application state"
+        raise RuntimeError(msg)
+    return mailer
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
@@ -91,3 +110,5 @@ EditServiceDep = Annotated[EditBookService, Depends(get_edit_service)]
 JobQueueDep = Annotated[JobQueue, Depends(get_job_queue)]
 ConvertServiceDep = Annotated[ConvertBookService | None, Depends(get_convert_service)]
 RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_service)]
+SendServiceDep = Annotated[SendToEreaderService | None, Depends(get_send_service)]
+MailerDep = Annotated[Mailer | None, Depends(get_mailer)]

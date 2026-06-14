@@ -12,6 +12,7 @@ from silverfish_api.deps import (
     JobQueueDep,
     RefreshServiceDep,
     RepositoryDep,
+    SendServiceDep,
     StorageDep,
 )
 from silverfish_api.errors import (
@@ -29,6 +30,7 @@ from silverfish_api.schemas import (
     ConvertRequest,
     JobOut,
     RefreshRequest,
+    SendRequest,
 )
 from silverfish_core.domain.models import Author, Book, Series, Tag
 from silverfish_core.jobs.queue import ProgressCallback
@@ -350,6 +352,72 @@ def refresh_metadata(
         code = 404 if "not found" in message.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=message) from exc
     return BookOut.from_domain(book)
+
+
+@router.post(
+    "/books/{book_id}/send",
+    response_model=JobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_503, **ERROR_500},
+)
+def send_book(
+    book_id: int,
+    request: SendRequest,
+    repository: RepositoryDep,
+    send_service: SendServiceDep,
+    job_queue: JobQueueDep,
+) -> JobOut:
+    book = repository.get_book(book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if send_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Sending is unavailable: SMTP is not configured",
+        )
+
+    available = {fmt.extension.upper() for fmt in book.formats}
+    book_format = _resolve_send_format(request.format, available)
+    if book_format is None:
+        detail = (
+            f"The book has no {request.format.upper()} format"
+            if request.format
+            else "The book has no sendable format"
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    service = send_service
+    to_email = request.to_email
+
+    def work(report: ProgressCallback) -> None:
+        report(0.1, "Preparing email")
+        service.send(book_id=book_id, book_format=book_format, to_email=to_email)
+        report(1.0, "Sent")
+
+    job_id = job_queue.submit("send", work, key=f"send:{book_id}:{book_format}:{to_email}")
+    job = job_queue.get(job_id)
+    if job is None:  # pragma: no cover - just submitted
+        raise HTTPException(status_code=500, detail="Failed to enqueue job")
+    return JobOut(
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        progress=job.progress,
+        message=job.message,
+        error=job.error,
+    )
+
+
+def _resolve_send_format(requested: str | None, available: set[str]) -> str | None:
+    """Pick the format to send. An explicit request must be present; otherwise
+    choose the highest-priority sendable format the book has.
+    """
+    if requested is not None:
+        return requested.upper() if requested.upper() in available else None
+    for candidate in _SOURCE_PRIORITY:
+        if candidate in available:
+            return candidate
+    return None
 
 
 @router.get("/search", response_model=BookPage, responses=_LIST_ERRORS)

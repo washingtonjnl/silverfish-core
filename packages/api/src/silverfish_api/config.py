@@ -50,9 +50,24 @@ class Settings(BaseSettings):
     # locations; if still not found, conversion/binary metadata features degrade.
     calibre_bin_dir: Path | None = Field(default=None)
 
+    # SMTP (send-to-ereader). When smtp_host is empty, sending is unavailable
+    # (the endpoint returns 503). Secrets belong in .env.local. These credentials
+    # are read once at boot and never travel in a send request.
+    smtp_host: str = Field(default="")
+    smtp_port: int = Field(default=587)
+    smtp_username: str = Field(default="")
+    smtp_password: str = Field(default="")
+    smtp_from: str = Field(default="")
+    smtp_security: str = Field(default="starttls")
+    smtp_max_attachment_mb: int = Field(default=25, ge=1)
+
     @property
     def metadata_db(self) -> Path:
         return self.library_dir / "metadata.db"
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host)
 
 
 def load_settings(env_dir: Path | None = None) -> Settings:
