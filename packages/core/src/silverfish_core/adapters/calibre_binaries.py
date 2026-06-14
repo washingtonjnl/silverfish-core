@@ -11,6 +11,7 @@ import platform
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 EBOOK_CONVERT = "ebook-convert"
 EBOOK_META = "ebook-meta"
@@ -37,6 +38,21 @@ class ProcessResult:
     returncode: int
     stdout: str
     stderr: str
+
+
+@runtime_checkable
+class ProcessRunner(Protocol):
+    """Runs an argv list and returns its result. Lets adapters depend on the
+    capability, not the concrete runner (so tests can substitute a fake).
+    """
+
+    def run(
+        self,
+        argv: list[str],
+        *,
+        timeout: float = ...,
+        env: dict[str, str] | None = ...,
+    ) -> ProcessResult: ...
 
 
 class SubprocessRunner:

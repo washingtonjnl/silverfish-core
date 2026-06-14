@@ -60,6 +60,9 @@ class FakeRepository:
     def book_dir(self, book_id: int) -> str | None:
         return None
 
+    def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
+        return None
+
 
 class FakeStorage:
     def read_book_file(self, path: str) -> bytes:

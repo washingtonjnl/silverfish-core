@@ -392,6 +392,22 @@ class SqliteCalibreRepository:
             row = session.get(cs.Book, book_id)
             return row.path if row is not None else None
 
+    def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
+        """Insert (or replace) a ``data`` row for a new format of the book."""
+        fmt = extension.upper()
+        with Session(self._engine) as session:
+            existing = session.scalars(
+                select(cs.Data).where(cs.Data.book == book_id, cs.Data.format == fmt)
+            ).first()
+            if existing is not None:
+                existing.uncompressed_size = size_bytes
+                existing.name = name
+            else:
+                session.add(
+                    cs.Data(book=book_id, format=fmt, uncompressed_size=size_bytes, name=name)
+                )
+            session.commit()
+
     # --- entity upserts (case-insensitive, reuse existing) ------------------
 
     def _resolve_author_sorts(self, authors: Sequence[dm.Author]) -> list[dm.Author]:

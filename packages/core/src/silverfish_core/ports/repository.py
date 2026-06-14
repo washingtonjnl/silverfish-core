@@ -59,3 +59,7 @@ class MetadataRepository(Protocol):
         Used to relocate files when a rename changes the computed path.
         """
         ...
+
+    def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
+        """Register a new format file for a book (a ``data`` row)."""
+        ...
