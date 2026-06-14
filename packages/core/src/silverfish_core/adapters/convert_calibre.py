@@ -14,8 +14,9 @@ from pathlib import Path
 from silverfish_core.adapters.calibre_binaries import ProcessRunner, SubprocessRunner
 from silverfish_core.ports.types import ConversionResult
 
-# Calibre prints lines like "12% Converting ...". Capture the percentage.
-_PROGRESS_RE = re.compile(r"(\d+)%")
+# Calibre prints lines like "12% Converting input to HTML...". Capture the
+# percentage and the descriptive message that follows it.
+_PROGRESS_RE = re.compile(r"(\d+)%\s*(.*)")
 
 
 class CalibreConverter:
@@ -32,7 +33,7 @@ class CalibreConverter:
         *,
         opf: bytes | None = None,
         cover: bytes | None = None,
-        on_progress: Callable[[float], None] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> ConversionResult:
         output_format = Path(output_path).suffix.lstrip(".").upper()
         tmp_paths: list[Path] = []
@@ -47,12 +48,13 @@ class CalibreConverter:
                 tmp_paths.append(cover_path)
                 argv += ["--cover", str(cover_path)]
 
-            result = self._runner.run(argv)
+            # Stream stdout line-by-line so progress is reported live, not only
+            # after ebook-convert finishes.
+            on_line = self._progress_line_handler(on_progress)
+            result = self._runner.run(argv, on_line=on_line)
         finally:
             for path in tmp_paths:
                 path.unlink(missing_ok=True)
-
-        self._report_progress(result.stdout, on_progress)
 
         if result.returncode != 0:
             return ConversionResult(
@@ -67,11 +69,20 @@ class CalibreConverter:
             tmp.write(data)
             return Path(tmp.name)
 
-    def _report_progress(self, stdout: str, on_progress: Callable[[float], None] | None) -> None:
+    def _progress_line_handler(
+        self, on_progress: Callable[[float, str], None] | None
+    ) -> Callable[[str], None] | None:
         if on_progress is None:
-            return
-        for match in _PROGRESS_RE.finditer(stdout):
-            on_progress(int(match.group(1)) / 100.0)
+            return None
+
+        def handle(line: str) -> None:
+            match = _PROGRESS_RE.search(line)
+            if match:
+                fraction = int(match.group(1)) / 100.0
+                message = match.group(2).strip()
+                on_progress(fraction, message)
+
+        return handle
 
     def _clean_error(self, stderr: str) -> str:
         """Drop Python traceback noise, keeping the meaningful Calibre lines."""

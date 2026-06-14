@@ -97,3 +97,20 @@ class TestSubprocessRunner:
         runner = SubprocessRunner()
         with pytest.raises((FileNotFoundError, OSError)):
             runner.run([str(Path(os.sep) / "no" / "such" / "binary")])
+
+    def test_on_line_receives_output_lines_live(self) -> None:
+        # The callback is invoked per line as the process emits them, so callers
+        # can react to progress before the process exits.
+        seen: list[str] = []
+        runner = SubprocessRunner()
+        result = runner.run(
+            ["/bin/sh", "-c", "echo one; echo two; echo three"], on_line=seen.append
+        )
+        assert result.returncode == 0
+        assert [line.strip() for line in seen] == ["one", "two", "three"]
+
+    def test_on_line_still_captures_full_stdout(self) -> None:
+        runner = SubprocessRunner()
+        result = runner.run(["/bin/sh", "-c", "echo a; echo b"], on_line=lambda _line: None)
+        assert "a" in result.stdout
+        assert "b" in result.stdout

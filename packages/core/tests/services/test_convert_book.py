@@ -32,6 +32,9 @@ class FakeRepository:
     def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
         self.added.append((book_id, extension, size_bytes, name))
 
+    def remove_format(self, book_id: int, book_format: str) -> None:
+        raise NotImplementedError
+
     # Unused by the convert service.
     def get_book(self, book_id: int) -> Book | None:
         raise NotImplementedError
@@ -91,13 +94,13 @@ class FakeConverter:
         *,
         opf: bytes | None = None,
         cover: bytes | None = None,
-        on_progress: Callable[[float], None] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> ConversionResult:
         self.calls.append((input_path, output_path))
         if self.ok:
             Path(output_path).write_bytes(b"CONVERTED")
             if on_progress:
-                on_progress(1.0)
+                on_progress(1.0, "done")
         fmt = Path(output_path).suffix.lstrip(".").upper()
         return ConversionResult(ok=self.ok, output_format=fmt, error=self.error)
 
@@ -125,7 +128,10 @@ class TestConvert:
         service, _, _ = _service(FakeConverter(ok=True))
         seen: list[float] = []
         service.convert_book(
-            book_id=1, source_format="EPUB", target_format="PDF", on_progress=seen.append
+            book_id=1,
+            source_format="EPUB",
+            target_format="PDF",
+            on_progress=lambda fraction, _message: seen.append(fraction),
         )
         assert 1.0 in seen
 

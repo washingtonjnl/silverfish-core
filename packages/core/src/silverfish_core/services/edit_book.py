@@ -6,9 +6,20 @@ storage so the files follow the DB. Deleting removes the row and the folder.
 Pure orchestration over the repository and storage ports.
 """
 
+from typing import Protocol, runtime_checkable
+
 from silverfish_core.domain.models import Book
 from silverfish_core.ports.repository import MetadataRepository
 from silverfish_core.ports.storage import FileStorage
+
+
+@runtime_checkable
+class BookEditor(Protocol):
+    """The ability to apply a full-book edit. Lets other services depend on the
+    capability rather than the concrete ``EditBookService``.
+    """
+
+    def edit_book(self, book: Book) -> Book: ...
 
 
 class EditBookService:
@@ -42,3 +53,16 @@ class EditBookService:
             return  # nothing to delete
         self._repository.delete_book(book_id)
         self._storage.delete(book_dir)
+
+    def delete_format(self, book_id: int, book_format: str) -> bool:
+        """Remove a single format from a book: its file and its ``data`` row.
+
+        Returns ``True`` if the format existed and was removed, ``False`` if the
+        book did not have it. The book itself is left intact.
+        """
+        path = self._repository.format_path(book_id, book_format)
+        if path is None:
+            return False
+        self._repository.remove_format(book_id, book_format)
+        self._storage.delete(path)
+        return True

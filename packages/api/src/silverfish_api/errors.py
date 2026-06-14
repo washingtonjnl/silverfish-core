@@ -15,6 +15,7 @@ from silverfish_api.schemas import ErrorBody, ErrorDetail, ErrorResponse
 
 HTTP_400_BAD_REQUEST = 400
 HTTP_404_NOT_FOUND = 404
+HTTP_409_CONFLICT = 409
 HTTP_422_VALIDATION = 422
 HTTP_500_INTERNAL = 500
 HTTP_503_UNAVAILABLE = 503
@@ -34,6 +35,9 @@ ERROR_400: dict[int | str, dict[str, object]] = {
 }
 ERROR_503: dict[int | str, dict[str, object]] = {
     HTTP_503_UNAVAILABLE: {"model": ErrorResponse, "description": "Service unavailable"},
+}
+ERROR_409: dict[int | str, dict[str, object]] = {
+    HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "Conflict"},
 }
 
 

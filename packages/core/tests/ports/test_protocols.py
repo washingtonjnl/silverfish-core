@@ -63,6 +63,9 @@ class FakeRepository:
     def add_format(self, book_id: int, extension: str, size_bytes: int, name: str) -> None:
         return None
 
+    def remove_format(self, book_id: int, book_format: str) -> None:
+        return None
+
 
 class FakeStorage:
     def read_book_file(self, path: str) -> bytes:
@@ -89,7 +92,7 @@ class FakeConverter:
         *,
         opf: bytes | None = None,
         cover: bytes | None = None,
-        on_progress: Callable[[float], None] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
     ) -> ConversionResult:
         return ConversionResult(ok=True, output_format="EPUB")
 

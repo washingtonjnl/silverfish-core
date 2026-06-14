@@ -129,8 +129,16 @@ class BookUpdate(BaseModel):
 class ConvertRequest(BaseModel):
     """Request to convert a book from one format to another."""
 
-    source_format: str
     target_format: str
+    # Optional: when omitted, the API picks the best available source by a
+    # default priority order.
+    source_format: str | None = None
+
+
+class RefreshRequest(BaseModel):
+    """Request to refresh a book's metadata from one of its format files."""
+
+    source_format: str
 
 
 class JobOut(BaseModel):
@@ -140,6 +148,8 @@ class JobOut(BaseModel):
     type: str
     status: str
     progress: float
+    # Human-readable description of the current step (from the underlying tool).
+    message: str = ""
     error: str | None = None
 
 

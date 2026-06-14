@@ -14,6 +14,7 @@ from silverfish_core.ports import FileStorage, MetadataRepository
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
+from silverfish_core.services.refresh_metadata import RefreshMetadataService
 
 
 def get_repository(request: Request) -> MetadataRepository:
@@ -74,9 +75,19 @@ def get_convert_service(request: Request) -> ConvertBookService | None:
     return service
 
 
+def get_refresh_service(request: Request) -> RefreshMetadataService:
+    """Return the process-wide metadata-refresh service from the app state."""
+    service = request.app.state.refresh_service
+    if not isinstance(service, RefreshMetadataService):
+        msg = "Refresh service is not configured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
 EditServiceDep = Annotated[EditBookService, Depends(get_edit_service)]
 JobQueueDep = Annotated[JobQueue, Depends(get_job_queue)]
 ConvertServiceDep = Annotated[ConvertBookService | None, Depends(get_convert_service)]
+RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_service)]

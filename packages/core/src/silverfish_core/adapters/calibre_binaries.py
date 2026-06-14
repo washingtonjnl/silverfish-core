@@ -9,6 +9,7 @@ shell) so a filename or metadata value can never be interpreted as a command.
 import os
 import platform
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -52,6 +53,7 @@ class ProcessRunner(Protocol):
         *,
         timeout: float = ...,
         env: dict[str, str] | None = ...,
+        on_line: Callable[[str], None] | None = ...,
     ) -> ProcessResult: ...
 
 
@@ -64,14 +66,24 @@ class SubprocessRunner:
         *,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
         env: dict[str, str] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> ProcessResult:
         """Run *argv* and return its result.
 
         ``shell`` is never used, so list elements are passed verbatim and shell
-        metacharacters in (e.g.) a filename are inert. Raises ``TimeoutError`` if
-        the command exceeds *timeout*, and ``FileNotFoundError`` if the
-        executable does not exist.
+        metacharacters in (e.g.) a filename are inert. When *on_line* is given,
+        stdout is read line-by-line as the process runs and each line is passed
+        to it (live progress); otherwise output is captured at once. Raises
+        ``TimeoutError`` on timeout and ``FileNotFoundError`` if the executable
+        does not exist.
         """
+        if on_line is None:
+            return self._run_buffered(argv, timeout=timeout, env=env)
+        return self._run_streaming(argv, timeout=timeout, env=env, on_line=on_line)
+
+    def _run_buffered(
+        self, argv: list[str], *, timeout: float, env: dict[str, str] | None
+    ) -> ProcessResult:
         try:
             completed = subprocess.run(  # noqa: S603 - argv list, shell=False, no user-controlled executable
                 argv,
@@ -90,6 +102,41 @@ class SubprocessRunner:
             returncode=completed.returncode,
             stdout=completed.stdout or "",
             stderr=completed.stderr or "",
+        )
+
+    def _run_streaming(
+        self,
+        argv: list[str],
+        *,
+        timeout: float,
+        env: dict[str, str] | None,
+        on_line: Callable[[str], None],
+    ) -> ProcessResult:
+        stdout_lines: list[str] = []
+        process = subprocess.Popen(  # noqa: S603 - argv list, shell=False, no user-controlled executable
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            env=env,
+        )
+        try:
+            if process.stdout is not None:
+                for line in process.stdout:
+                    stdout_lines.append(line)
+                    on_line(line)
+            _, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            process.kill()
+            process.communicate()
+            msg = f"Command timed out after {timeout}s: {argv[0]}"
+            raise TimeoutError(msg) from exc
+        return ProcessResult(
+            returncode=process.returncode,
+            stdout="".join(stdout_lines),
+            stderr=stderr or "",
         )
 
 

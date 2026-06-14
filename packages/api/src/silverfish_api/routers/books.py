@@ -10,11 +10,26 @@ from silverfish_api.deps import (
     EditServiceDep,
     ImportServiceDep,
     JobQueueDep,
+    RefreshServiceDep,
     RepositoryDep,
     StorageDep,
 )
-from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500, ERROR_503
-from silverfish_api.schemas import BookOut, BookPage, BookUpdate, ConvertRequest, JobOut
+from silverfish_api.errors import (
+    ERROR_400,
+    ERROR_404,
+    ERROR_409,
+    ERROR_422,
+    ERROR_500,
+    ERROR_503,
+)
+from silverfish_api.schemas import (
+    BookOut,
+    BookPage,
+    BookUpdate,
+    ConvertRequest,
+    JobOut,
+    RefreshRequest,
+)
 from silverfish_core.domain.models import Author, Book, Series, Tag
 from silverfish_core.jobs.queue import ProgressCallback
 from silverfish_core.ports import FileStorage
@@ -40,6 +55,25 @@ def _read_or_none(storage: FileStorage, relative_path: str | None) -> bytes | No
         return storage.read_book_file(relative_path)
     except (FileNotFoundError, ValueError):
         return None
+
+
+# Preference order when the client lets the API pick a conversion source — best
+# (richest, most reliable) source first. This is API policy, not core logic.
+_SOURCE_PRIORITY = ("EPUB", "AZW3", "MOBI", "AZW", "FB2", "PDF", "TXT")
+
+
+def _resolve_source_format(requested: str | None, available: set[str]) -> str | None:
+    """Pick the source format to convert from.
+
+    If the client specified one, use it only when present. Otherwise choose the
+    highest-priority format the book actually has.
+    """
+    if requested is not None:
+        return requested.upper() if requested.upper() in available else None
+    for candidate in _SOURCE_PRIORITY:
+        if candidate in available:
+            return candidate
+    return next(iter(available), None)
 
 
 # Formats accepted for upload (mirrors Calibre's common set).
@@ -218,11 +252,26 @@ def download_book_format(
     )
 
 
+@router.delete(
+    "/books/{book_id}/formats/{book_format}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**ERROR_404, **ERROR_500},
+)
+def delete_book_format(
+    book_id: int, book_format: str, repository: RepositoryDep, edit_service: EditServiceDep
+) -> Response:
+    if repository.get_book(book_id) is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if not edit_service.delete_format(book_id, book_format):
+        raise HTTPException(status_code=404, detail="Format not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/books/{book_id}/convert",
     response_model=JobOut,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={**ERROR_404, **ERROR_422, **ERROR_503, **ERROR_500},
+    responses={**ERROR_400, **ERROR_404, **ERROR_409, **ERROR_422, **ERROR_503, **ERROR_500},
 )
 def convert_book(
     book_id: int,
@@ -231,7 +280,8 @@ def convert_book(
     convert_service: ConvertServiceDep,
     job_queue: JobQueueDep,
 ) -> JobOut:
-    if repository.get_book(book_id) is None:
+    book = repository.get_book(book_id)
+    if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
     if convert_service is None:
         raise HTTPException(
@@ -239,23 +289,67 @@ def convert_book(
             detail="Conversion is unavailable: ebook-convert is not installed",
         )
 
+    target = request.target_format.upper()
+    available = {fmt.extension.upper() for fmt in book.formats}
+    if target in available:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"The book already has a {target} format",
+        )
+    source_format = _resolve_source_format(request.source_format, available)
+    if source_format is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No suitable source format is available to convert from",
+        )
+
+    # Deduplicate: refuse a second job for the same conversion already in flight.
+    dedup_key = f"convert:{book_id}:{source_format}->{target}"
+    if job_queue.find_active(dedup_key) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A {source_format}->{target} conversion for this book is already in progress",
+        )
+
     service = convert_service
 
     def work(report: ProgressCallback) -> None:
         service.convert_book(
             book_id=book_id,
-            source_format=request.source_format,
-            target_format=request.target_format,
+            source_format=source_format,
+            target_format=target,
             on_progress=report,
         )
 
-    job_id = job_queue.submit("convert", work)
+    job_id = job_queue.submit("convert", work, key=dedup_key)
     job = job_queue.get(job_id)
     if job is None:  # pragma: no cover - just submitted
         raise HTTPException(status_code=500, detail="Failed to enqueue job")
     return JobOut(
-        id=job.id, type=job.type, status=job.status, progress=job.progress, error=job.error
+        id=job.id,
+        type=job.type,
+        status=job.status,
+        progress=job.progress,
+        message=job.message,
+        error=job.error,
     )
+
+
+@router.post(
+    "/books/{book_id}/refresh-metadata",
+    response_model=BookOut,
+    responses={**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_500},
+)
+def refresh_metadata(
+    book_id: int, request: RefreshRequest, refresh_service: RefreshServiceDep
+) -> BookOut:
+    try:
+        book = refresh_service.refresh(book_id=book_id, source_format=request.source_format)
+    except ValueError as exc:
+        message = str(exc)
+        code = 404 if "not found" in message.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=message) from exc
+    return BookOut.from_domain(book)
 
 
 @router.get("/search", response_model=BookPage, responses=_LIST_ERRORS)

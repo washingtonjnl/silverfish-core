@@ -19,11 +19,11 @@ from xml.etree.ElementTree import Element, ParseError
 # content is untrusted, so we never use the stdlib parser on it directly.
 from defusedxml.ElementTree import fromstring as defused_fromstring
 
+from silverfish_core.adapters._opf import parse_opf
 from silverfish_core.ports.types import BookMeta
 
 _CONTAINER_PATH = "META-INF/container.xml"
 _OPF_NS = "http://www.idpf.org/2007/opf"
-_DC_NS = "http://purl.org/dc/elements/1.1/"
 _CONTAINER_NS = "urn:oasis:names:tc:opendocument:xmlns:container"
 
 # Defensive cap: an OPF document larger than this is not a real metadata file.
@@ -67,39 +67,8 @@ class PythonMetadataExtractor:
             if opf_root is None:
                 return fallback
 
-            metadata = opf_root.find(f"{{{_OPF_NS}}}metadata")
-            if metadata is None:
-                return fallback
-
-            title = self._text(metadata.find(f"{{{_DC_NS}}}title")) or fallback.title
-            authors = tuple(
-                t for e in metadata.findall(f"{{{_DC_NS}}}creator") if (t := self._text(e))
-            )
-            languages = tuple(
-                t for e in metadata.findall(f"{{{_DC_NS}}}language") if (t := self._text(e))
-            )
-            tags = tuple(
-                t for e in metadata.findall(f"{{{_DC_NS}}}subject") if (t := self._text(e))
-            )
-            publisher = self._text(metadata.find(f"{{{_DC_NS}}}publisher"))
-            description = self._text(metadata.find(f"{{{_DC_NS}}}description"))
-            identifiers = self._identifiers(metadata)
-            series, series_index = self._series(metadata)
             cover = self._cover(zf, opf_root, opf_path)
-
-            return BookMeta(
-                title=title,
-                extension=ext,
-                authors=authors,
-                cover=cover,
-                description=description,
-                tags=tags,
-                series=series,
-                series_index=series_index,
-                languages=languages,
-                publisher=publisher,
-                identifiers=identifiers,
-            )
+            return parse_opf(opf_root, extension=ext, fallback_title=fallback.title, cover=cover)
 
     def _find_opf_path(self, zf: zipfile.ZipFile) -> str | None:
         if _CONTAINER_PATH not in zf.namelist():
@@ -118,37 +87,6 @@ class PythonMetadataExtractor:
             return None
         data = zf.read(name)
         return defused_fromstring(data)
-
-    def _text(self, element: Element | None) -> str | None:
-        if element is None or element.text is None:
-            return None
-        stripped = element.text.strip()
-        return stripped or None
-
-    def _identifiers(self, metadata: Element) -> tuple[tuple[str, str], ...]:
-        result: list[tuple[str, str]] = []
-        for element in metadata.findall(f"{{{_DC_NS}}}identifier"):
-            scheme = element.get(f"{{{_OPF_NS}}}scheme")
-            value = self._text(element)
-            # Skip the internal uuid/book-id identifier; keep real schemes.
-            if scheme and value and scheme.lower() != "uuid":
-                result.append((scheme.lower(), value))
-        return tuple(result)
-
-    def _series(self, metadata: Element) -> tuple[str | None, float | None]:
-        series: str | None = None
-        index: float | None = None
-        for meta in metadata.findall(f"{{{_OPF_NS}}}meta"):
-            name = meta.get("name")
-            content = meta.get("content")
-            if name == "calibre:series" and content:
-                series = content
-            elif name == "calibre:series_index" and content:
-                try:
-                    index = float(content)
-                except ValueError:
-                    index = None
-        return series, index
 
     def _cover(self, zf: zipfile.ZipFile, opf_root: Element, opf_path: str) -> bytes | None:
         metadata = opf_root.find(f"{{{_OPF_NS}}}metadata")

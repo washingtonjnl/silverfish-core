@@ -75,14 +75,100 @@ class TestProgress:
         try:
 
             def work(report: ProgressCallback) -> None:
-                report(0.5)
-                report(1.0)
+                report(0.5, "half")
+                report(1.0, "done")
 
             job_id = queue.submit("convert", work)
             _wait_until(lambda: _require(queue, job_id).status is JobStatus.DONE)
             assert _require(queue, job_id).progress == 1.0
         finally:
             queue.stop()
+
+
+class TestDeduplication:
+    def test_find_active_returns_queued_or_running_job(self) -> None:
+        queue = JobQueue()  # not started: job stays queued
+        job_id = queue.submit("convert", lambda _r: None, key="book:1:EPUB->PDF")
+        found = queue.find_active("book:1:EPUB->PDF")
+        assert found is not None
+        assert found.id == job_id
+
+    def test_find_active_none_for_unknown_key(self) -> None:
+        queue = JobQueue()
+        queue.submit("convert", lambda _r: None, key="book:1:EPUB->PDF")
+        assert queue.find_active("book:2:EPUB->MOBI") is None
+
+    def test_find_active_ignores_finished_jobs(self) -> None:
+        queue = JobQueue()
+        queue.start()
+        try:
+            job_id = queue.submit("convert", lambda _r: None, key="k")
+            _wait_until(lambda: _require(queue, job_id).status is JobStatus.DONE)
+            # A completed job is no longer "active", so the key is free again.
+            assert queue.find_active("k") is None
+        finally:
+            queue.stop()
+
+    def test_jobs_without_key_are_not_deduplicated(self) -> None:
+        queue = JobQueue()
+        queue.submit("convert", lambda _r: None)
+        assert queue.find_active("") is None
+
+
+class TestWaitForChange:
+    def test_returns_immediately_when_already_changed(self) -> None:
+        queue = JobQueue()
+        job_id = queue.submit("convert", lambda _r: None)
+        # We pass a stale revision, so a change is already available.
+        job, revision = queue.wait_for_change(job_id, since=-1, timeout=1.0)
+        assert job is not None
+        assert revision >= 0
+
+    def test_blocks_until_progress_changes(self) -> None:
+        queue = JobQueue()
+        queue.start()
+        try:
+            go = threading.Event()
+            hold = threading.Event()
+
+            def work(report: ProgressCallback) -> None:
+                go.wait(2.0)
+                report(0.5, "half")
+                hold.wait(2.0)  # pause at 0.5 so the test observes it
+
+            job_id = queue.submit("convert", work)
+            _wait_until(lambda: _require(queue, job_id).status is JobStatus.RUNNING)
+            current_rev = _require(queue, job_id).revision
+
+            go.set()
+            job, new_rev = queue.wait_for_change(job_id, since=current_rev, timeout=2.0)
+            assert job is not None
+            assert new_rev > current_rev
+            assert job.progress == 0.5
+            hold.set()
+        finally:
+            queue.stop()
+
+    def test_times_out_when_no_change(self) -> None:
+        queue = JobQueue()
+        queue.start()
+        try:
+            release = threading.Event()
+            job_id = queue.submit("convert", lambda _r: release.wait(2.0))
+            _wait_until(lambda: _require(queue, job_id).status is JobStatus.RUNNING)
+            current_rev = _require(queue, job_id).revision
+
+            # No further change within the timeout -> same revision returned.
+            _job, rev2 = queue.wait_for_change(job_id, since=current_rev, timeout=0.2)
+            assert rev2 == current_rev
+            release.set()
+        finally:
+            queue.stop()
+
+    def test_unknown_job_returns_none(self) -> None:
+        queue = JobQueue()
+        job, _ = queue.wait_for_change("nope", since=-1, timeout=0.2)
+        assert job is None
 
 
 class TestLifecycle:

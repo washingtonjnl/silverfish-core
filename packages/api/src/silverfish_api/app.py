@@ -18,12 +18,15 @@ from silverfish_api.routers import books, jobs
 from silverfish_api.storage_factory import build_storage
 from silverfish_core.adapters.calibre_binaries import CalibreBinaries
 from silverfish_core.adapters.convert_calibre import CalibreConverter
+from silverfish_core.adapters.extract_composite import CompositeMetadataExtractor
+from silverfish_core.adapters.extract_ebook_meta import EbookMetaExtractor
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
 from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
+from silverfish_core.services.refresh_metadata import RefreshMetadataService
 
 
 class BinaryHealthOut(BaseModel):
@@ -47,13 +50,25 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = load_settings()
     repository = SqliteCalibreRepository(db_path=settings.metadata_db)
     storage = build_storage(settings)
-    import_service = ImportBookService(
-        extractor=PythonMetadataExtractor(),
+    binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
+
+    # EPUB is extracted natively; other formats use ebook-meta when available.
+    ebook_meta_extractor = (
+        EbookMetaExtractor(ebook_meta=binaries.ebook_meta)
+        if binaries.ebook_meta is not None
+        else None
+    )
+    extractor = CompositeMetadataExtractor(
+        native=PythonMetadataExtractor(), ebook_meta=ebook_meta_extractor
+    )
+    import_service = ImportBookService(extractor=extractor, repository=repository, storage=storage)
+    edit_service = EditBookService(repository=repository, storage=storage)
+    refresh_service = RefreshMetadataService(
         repository=repository,
         storage=storage,
+        extractor=extractor,
+        edit_service=edit_service,
     )
-    edit_service = EditBookService(repository=repository, storage=storage)
-    binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
 
     job_queue = JobQueue()
     job_queue.start()
@@ -71,6 +86,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.storage = storage
     app.state.import_service = import_service
     app.state.edit_service = edit_service
+    app.state.refresh_service = refresh_service
     app.state.binaries = binaries
     app.state.job_queue = job_queue
     app.state.convert_service = convert_service
