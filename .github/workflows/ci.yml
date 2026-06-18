@@ -85,6 +85,10 @@ jobs:
         working-directory: packages/sdk-node
         run: pnpm run generate
 
-      - name: Build & type-check the SDK
+      - name: Type-check the SDK
+        working-directory: packages/sdk-node
+        run: pnpm run typecheck
+
+      - name: Build the SDK (ESM + CJS + types)
         working-directory: packages/sdk-node
         run: pnpm run build
