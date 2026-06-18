@@ -22,18 +22,17 @@ _WAIT_CEILING_SECONDS = 15.0
 
 
 def _to_out(job: Job) -> JobOut:
-    return JobOut(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        error=job.error,
-    )
+    return JobOut.from_job(job)
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut, responses={**ERROR_404, **ERROR_500})
 def get_job(job_id: str, job_queue: JobQueueDep) -> JobOut:
+    """Return the current status and progress of a single job.
+
+    Looks up the job by `job_id` and returns its latest state for one-shot
+    polling. Responds 404 if no job with that id exists; use `/jobs/{job_id}/stream`
+    instead to follow progress live.
+    """
     job = job_queue.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")

@@ -131,6 +131,13 @@ def _to_page(page: Page[Book], codec: PublicIdCodec) -> BookPage:
 async def upload_book(
     file: UploadFile, import_service: ImportServiceDep, codec: PublicIdCodecDep
 ) -> BookOut:
+    """Upload a book file and create a new book.
+
+    Accepts a multipart `file` whose extension must be one of the allowed
+    upload formats; metadata is extracted from the file on import. Returns the
+    created book with `201`, or `400` if the file is rejected (unsupported
+    extension or unreadable content).
+    """
     data = await file.read()
     upload = UploadedFile(filename=file.filename or "upload", data=data)
     try:
@@ -149,6 +156,12 @@ def list_books(
     sort: SortField = SortField.TITLE,
     direction: SortDirection = SortDirection.ASC,
 ) -> BookPage:
+    """List books, paginated and sorted.
+
+    Returns a page of books controlled by `page` and `page_size`, ordered by
+    `sort` field in the given `direction`. Out-of-range pagination values are
+    rejected with `422`.
+    """
     result = repository.list_books(
         page=page,
         page_size=page_size,
@@ -159,6 +172,11 @@ def list_books(
 
 @router.get("/books/{book_id}", response_model=BookOut, responses=_GET_ERRORS)
 def get_book(book_id: BookIdDep, repository: RepositoryDep, codec: PublicIdCodecDep) -> BookOut:
+    """Get a single book by its public id.
+
+    Looks up the book identified by `book_id` (the book's public id) and returns
+    its full metadata. Responds with `404` when no such book exists.
+    """
     book = repository.get_book(book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -173,6 +191,13 @@ def update_book(
     edit_service: EditServiceDep,
     codec: PublicIdCodecDep,
 ) -> BookOut:
+    """Partially update a book's metadata.
+
+    Applies only the fields explicitly set in the request body, leaving omitted
+    fields untouched, and returns the updated book. Responds with `400` when the
+    patch is empty or violates a domain rule (e.g. an out-of-range `rating`),
+    and `404` when the book does not exist.
+    """
     if not patch.model_fields_set:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -199,6 +224,12 @@ def update_book(
 def delete_book(
     book_id: BookIdDep, repository: RepositoryDep, edit_service: EditServiceDep
 ) -> Response:
+    """Delete a book and all of its files.
+
+    Removes the book identified by `book_id` along with its stored formats and
+    cover, returning `204` with no body on success. Responds with `404` when the
+    book does not exist.
+    """
     if repository.get_book(book_id) is None:
         raise HTTPException(status_code=404, detail="Book not found")
     edit_service.delete_book(book_id)
@@ -239,6 +270,12 @@ def _apply_update(book: Book, patch: BookUpdate) -> Book:
     response_class=Response,
 )
 def get_book_cover(book_id: BookIdDep, repository: RepositoryDep, storage: StorageDep) -> Response:
+    """Download a book's cover image.
+
+    Returns the cover bytes as `image/jpeg` for the book identified by
+    `book_id`. Responds with `404` when the book has no recorded cover or the
+    cover file is missing from storage.
+    """
     relative = repository.cover_path(book_id)
     data = _read_or_none(storage, relative)
     if data is None:
@@ -254,6 +291,13 @@ def get_book_cover(book_id: BookIdDep, repository: RepositoryDep, storage: Stora
 def download_book_format(
     book_id: BookIdDep, book_format: str, repository: RepositoryDep, storage: StorageDep
 ) -> Response:
+    """Download one format of a book.
+
+    Returns the file for the given `book_format` of the book identified by
+    `book_id` as an `application/octet-stream` attachment, with the stored
+    filename in the `Content-Disposition` header. Responds with `404` when the
+    book lacks that format or the file is missing from storage.
+    """
     relative = repository.format_path(book_id, book_format)
     data = _read_or_none(storage, relative)
     if data is None or relative is None:
@@ -274,6 +318,12 @@ def download_book_format(
 def delete_book_format(
     book_id: BookIdDep, book_format: str, repository: RepositoryDep, edit_service: EditServiceDep
 ) -> Response:
+    """Delete one format of a book.
+
+    Removes the file for the given `book_format` of the book identified by
+    `book_id`, returning `204` with no body on success. Responds with `404` when
+    the book does not exist or it has no such format.
+    """
     if repository.get_book(book_id) is None:
         raise HTTPException(status_code=404, detail="Book not found")
     if not edit_service.delete_format(book_id, book_format):
@@ -294,6 +344,15 @@ def convert_book(
     convert_service: ConvertServiceDep,
     job_queue: JobQueueDep,
 ) -> JobOut:
+    """Convert a book to another format.
+
+    Enqueues a background conversion to `target_format`, optionally from an
+    explicit `source_format` (otherwise the best available source is chosen), and
+    returns `202` with a job to poll at `/jobs/{id}`. Responds with `404` if the
+    book is missing, `503` if `ebook-convert` is unavailable, `409` if the target
+    format already exists or an identical conversion is already in progress, and
+    `400` if no suitable source format is available.
+    """
     book = repository.get_book(book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -339,14 +398,7 @@ def convert_book(
     job = job_queue.get(job_id)
     if job is None:  # pragma: no cover - just submitted
         raise HTTPException(status_code=500, detail="Failed to enqueue job")
-    return JobOut(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        error=job.error,
-    )
+    return JobOut.from_job(job)
 
 
 @router.post(
@@ -360,6 +412,13 @@ def refresh_metadata(
     refresh_service: RefreshServiceDep,
     codec: PublicIdCodecDep,
 ) -> BookOut:
+    """Re-extract metadata from a book file and return the updated book.
+
+    Reads metadata afresh from the book's `source_format` file and merges it in:
+    fields the extraction produced replace the current ones, fields it could not
+    read are kept. Responds with `404` when the book or requested format is not
+    found, and `400` for any other refresh failure.
+    """
     try:
         book = refresh_service.refresh(book_id=book_id, source_format=request.source_format)
     except ValueError as exc:
@@ -382,6 +441,14 @@ def send_book(
     send_service: SendServiceDep,
     job_queue: JobQueueDep,
 ) -> JobOut:
+    """Email a book to a recipient.
+
+    Enqueues a background job to send the book to `to_email` in the requested
+    `format` (or the best available sendable format if unspecified), and returns
+    `202` with a job to poll at `/jobs/{id}`. Responds with `404` if the book is
+    missing, `503` if SMTP is not configured, and `400` if the book has no
+    matching or sendable format.
+    """
     book = repository.get_book(book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -413,14 +480,7 @@ def send_book(
     job = job_queue.get(job_id)
     if job is None:  # pragma: no cover - just submitted
         raise HTTPException(status_code=500, detail="Failed to enqueue job")
-    return JobOut(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        error=job.error,
-    )
+    return JobOut.from_job(job)
 
 
 def _resolve_send_format(requested: str | None, available: set[str]) -> str | None:
@@ -449,6 +509,14 @@ def search_books(
     rating_min: Annotated[int | None, Query(ge=0, le=10)] = None,
     rating_max: Annotated[int | None, Query(ge=0, le=10)] = None,
 ) -> BookPage:
+    """Search books by a text query and filters.
+
+    Returns a paginated page of books whose title, author, series or tags match
+    the query `q` (case-insensitive substring match), narrowed by the optional
+    `include_tags`, `exclude_tags`, `languages`, `formats`, and
+    `rating_min`/`rating_max` filters. Out-of-range pagination or rating values
+    are rejected with `422`.
+    """
     filters = SearchFilters(
         include_tags=tuple(include_tags or ()),
         exclude_tags=tuple(exclude_tags or ()),

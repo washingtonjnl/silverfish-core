@@ -56,7 +56,14 @@ def start_export(
     job_queue: JobQueueDep,
     codec: PublicIdCodecDep,
 ) -> JobOut:
-    """Start an async Calibre export; the download link is emailed when ready."""
+    """Start an async Calibre export; the download link is emailed when ready.
+
+    Enqueues a background job that snapshots the requested books (or the whole
+    library when `book_ids` is omitted) to a zip and emails a time-limited link
+    to `to_email`, returning 202 with the new job. Responds 503 when export is
+    unavailable (the calibredb binary is missing, SMTP is not configured, or no
+    public base URL is set for an absolute link), and 400 for a malformed book id.
+    """
     if export_service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -97,14 +104,7 @@ def start_export(
     job = job_queue.get(job_id)
     if job is None:  # pragma: no cover - just submitted
         raise HTTPException(status_code=500, detail="Failed to enqueue job")
-    return JobOut(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        error=job.error,
-    )
+    return JobOut.from_job(job)
 
 
 @router.get(

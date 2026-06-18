@@ -18,6 +18,12 @@ router = APIRouter(tags=["config"])
 
 @router.get("/config/email", response_model=EmailConfigOut, responses={**ERROR_500})
 def get_email_config(request: Request) -> EmailConfigOut:
+    """Return the non-secret SMTP settings for display.
+
+    Reports whether SMTP is `configured` along with `host`, `port`,
+    `from_address` (falling back to the username when no explicit from is set)
+    and `security`. The password is never read or returned.
+    """
     settings = request.app.state.settings
     return EmailConfigOut(
         configured=settings.smtp_configured,
@@ -34,6 +40,12 @@ def get_email_config(request: Request) -> EmailConfigOut:
     responses={**ERROR_503, **ERROR_500},
 )
 def test_email_config(payload: EmailTestRequest, mailer: MailerDep) -> None:
+    """Send a test email to verify SMTP connectivity.
+
+    Sends a test message to `to_email` and returns 204 on success. Responds 503
+    if SMTP is not configured, or 502 if the connection, authentication or send
+    fails.
+    """
     if mailer is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
