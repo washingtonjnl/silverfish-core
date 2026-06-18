@@ -71,8 +71,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         state.export_service = ExportService(
             exporter=fake_exporter,  # type: ignore[arg-type]
             store=store,
+            storage=state.storage,
             work_dir=tmp_path / "work",
-            download_base_url="http://localhost:8000/export/download",
+            public_base_url="http://localhost:8000",
         )
         yield test_client
 
@@ -105,11 +106,11 @@ class TestStartExport:
         assert response.status_code == 503
 
     def test_requires_public_base_url(self, client: TestClient) -> None:
-        # SMTP and calibredb are fine, but the link would be relative without a
-        # public base URL: refuse with a clear 503 instead of mailing a dud link.
+        # Local storage + no public base URL: the link would be relative, so
+        # refuse with a clear 503 instead of mailing a dud link. (With presigned
+        # storage this check is moot — the URL comes from the backend.)
         service = client.app.state.export_service  # type: ignore[attr-defined]
-        # Re-point the service at a relative base URL to simulate the missing var.
-        object.__setattr__(service, "_download_base_url", "/export/download")
+        object.__setattr__(service, "_public_base_url", "")
         response = client.post("/export/calibre", json={"to_email": "me@example.com"})
         assert response.status_code == 503
         assert "SILVERFISH_PUBLIC_BASE_URL" in response.json()["error"]["message"]

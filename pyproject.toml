@@ -18,6 +18,10 @@ dev = [
     "httpx>=0.28",
     "pre-commit>=4.4",
     "types-defusedxml>=0.7",
+    # S3 adapter + its in-process mock for tests (no AWS account/network needed).
+    "boto3>=1.35",
+    "boto3-stubs[s3]>=1.35",
+    "moto[s3]>=5.0",
 ]
 
 [tool.uv.workspace]

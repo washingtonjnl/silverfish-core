@@ -145,8 +145,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 runner=SubprocessRunner(),
             ),
             store=export_store,
+            storage=storage,
             work_dir=settings.resolved_export_dir,
-            download_base_url=settings.export_download_base_url,
+            public_base_url=settings.public_base_url,
         )
         if binaries.calibredb is not None
         else None
