@@ -5,10 +5,11 @@ determines the quality of the generated OpenAPI and therefore the SDKs. They are
 plain DTOs mapped from the neutral domain models.
 """
 
+from collections.abc import Callable
+
 from pydantic import BaseModel, Field
 
 from silverfish_core.domain.models import Book
-from silverfish_core.ids import encode_base62
 
 
 class ErrorDetail(BaseModel):
@@ -61,9 +62,9 @@ class FormatOut(BaseModel):
 class BookOut(BaseModel):
     """A book as returned by the API.
 
-    ``id`` is the public, URL-friendly base62 form of the book's internal
-    64-bit id (Instagram-style). It is always a string so the contract does not
-    change shape between library modes.
+    ``id`` is the public form of the book's internal id — always a string so the
+    contract keeps one shape, but rendered per library mode (short base62 for
+    standalone Snowflake ids, plain decimal for Calibre's small ids).
     """
 
     id: str
@@ -83,9 +84,9 @@ class BookOut(BaseModel):
     cover_url: str | None
 
     @classmethod
-    def from_domain(cls, book: Book) -> "BookOut":
+    def from_domain(cls, book: Book, encode_id: Callable[[int], str]) -> "BookOut":
         internal_id = book.id if book.id is not None else 0
-        book_id = encode_base62(internal_id)
+        book_id = encode_id(internal_id)
         return cls(
             id=book_id,
             title=book.title,

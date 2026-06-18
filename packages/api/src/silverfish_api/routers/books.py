@@ -11,6 +11,7 @@ from silverfish_api.deps import (
     EditServiceDep,
     ImportServiceDep,
     JobQueueDep,
+    PublicIdCodecDep,
     RefreshServiceDep,
     RepositoryDep,
     SendServiceDep,
@@ -24,6 +25,7 @@ from silverfish_api.errors import (
     ERROR_500,
     ERROR_503,
 )
+from silverfish_api.public_id import PublicIdCodec
 from silverfish_api.schemas import (
     BookOut,
     BookPage,
@@ -108,9 +110,9 @@ PageParam = Annotated[int, Query(ge=1)]
 PageSizeParam = Annotated[int, Query(ge=1, le=200)]
 
 
-def _to_page(page: Page[Book]) -> BookPage:
+def _to_page(page: Page[Book], codec: PublicIdCodec) -> BookPage:
     return BookPage(
-        items=[BookOut.from_domain(b) for b in page.items],
+        items=[BookOut.from_domain(b, codec.encode) for b in page.items],
         total=page.total,
         page=page.page,
         page_size=page.page_size,
@@ -126,19 +128,22 @@ def _to_page(page: Page[Book]) -> BookPage:
     status_code=status.HTTP_201_CREATED,
     responses=_UPLOAD_ERRORS,
 )
-async def upload_book(file: UploadFile, import_service: ImportServiceDep) -> BookOut:
+async def upload_book(
+    file: UploadFile, import_service: ImportServiceDep, codec: PublicIdCodecDep
+) -> BookOut:
     data = await file.read()
     upload = UploadedFile(filename=file.filename or "upload", data=data)
     try:
         book = import_service.import_book(upload, allowed_extensions=ALLOWED_UPLOAD_EXTENSIONS)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return BookOut.from_domain(book)
+    return BookOut.from_domain(book, codec.encode)
 
 
 @router.get("/books", response_model=BookPage, responses=_LIST_ERRORS)
 def list_books(
     repository: RepositoryDep,
+    codec: PublicIdCodecDep,
     page: PageParam = 1,
     page_size: PageSizeParam = 50,
     sort: SortField = SortField.TITLE,
@@ -149,20 +154,24 @@ def list_books(
         page_size=page_size,
         sort=SortOrder(field=sort, direction=direction),
     )
-    return _to_page(result)
+    return _to_page(result, codec)
 
 
 @router.get("/books/{book_id}", response_model=BookOut, responses=_GET_ERRORS)
-def get_book(book_id: BookIdDep, repository: RepositoryDep) -> BookOut:
+def get_book(book_id: BookIdDep, repository: RepositoryDep, codec: PublicIdCodecDep) -> BookOut:
     book = repository.get_book(book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
-    return BookOut.from_domain(book)
+    return BookOut.from_domain(book, codec.encode)
 
 
 @router.patch("/books/{book_id}", response_model=BookOut, responses=_PATCH_ERRORS)
 def update_book(
-    book_id: BookIdDep, patch: BookUpdate, repository: RepositoryDep, edit_service: EditServiceDep
+    book_id: BookIdDep,
+    patch: BookUpdate,
+    repository: RepositoryDep,
+    edit_service: EditServiceDep,
+    codec: PublicIdCodecDep,
 ) -> BookOut:
     if not patch.model_fields_set:
         raise HTTPException(
@@ -179,7 +188,7 @@ def update_book(
         # A domain rule was violated (e.g. rating out of range) — a bad request,
         # never a 500.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return BookOut.from_domain(updated)
+    return BookOut.from_domain(updated, codec.encode)
 
 
 @router.delete(
@@ -346,7 +355,10 @@ def convert_book(
     responses={**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_500},
 )
 def refresh_metadata(
-    book_id: BookIdDep, request: RefreshRequest, refresh_service: RefreshServiceDep
+    book_id: BookIdDep,
+    request: RefreshRequest,
+    refresh_service: RefreshServiceDep,
+    codec: PublicIdCodecDep,
 ) -> BookOut:
     try:
         book = refresh_service.refresh(book_id=book_id, source_format=request.source_format)
@@ -354,7 +366,7 @@ def refresh_metadata(
         message = str(exc)
         code = 404 if "not found" in message.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=message) from exc
-    return BookOut.from_domain(book)
+    return BookOut.from_domain(book, codec.encode)
 
 
 @router.post(
@@ -426,6 +438,7 @@ def _resolve_send_format(requested: str | None, available: set[str]) -> str | No
 @router.get("/search", response_model=BookPage, responses=_LIST_ERRORS)
 def search_books(
     repository: RepositoryDep,
+    codec: PublicIdCodecDep,
     q: str = "",
     page: PageParam = 1,
     page_size: PageSizeParam = 50,
@@ -445,4 +458,4 @@ def search_books(
         rating_max=rating_max,
     )
     result = repository.search(q, filters=filters, page=page, page_size=page_size)
-    return _to_page(result)
+    return _to_page(result, codec)
