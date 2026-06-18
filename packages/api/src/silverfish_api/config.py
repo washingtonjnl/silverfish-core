@@ -113,6 +113,12 @@ class Settings(BaseSettings):
     smtp_security: str = Field(default="starttls")
     smtp_max_attachment_mb: int = Field(default=25, ge=1)
 
+    # Public base URL the API is reachable at (scheme + host + optional port),
+    # e.g. "http://localhost:8000" in dev or "https://library.example.com" in
+    # production. Used to build absolute links in emails (the export download
+    # link). Without it, emailed links are relative and not clickable.
+    public_base_url: str = Field(default="")
+
     # Calibre export (snapshot a library to a downloadable zip). The zip is
     # ephemeral: a download link is emailed and the file is deleted once this TTL
     # passes. export_dir holds in-progress/finished zips (defaults under the
@@ -153,6 +159,17 @@ class Settings(BaseSettings):
     def resolved_export_dir(self) -> Path:
         """Directory for export zips. Defaults to ``<library_dir>/exports``."""
         return Path(self.export_dir) if self.export_dir else self.library_dir / "exports"
+
+    @property
+    def export_download_base_url(self) -> str:
+        """Absolute base URL for export download links (used in emails).
+
+        Built from ``public_base_url`` + the download route. When
+        ``public_base_url`` is unset, falls back to a relative path (links won't
+        be clickable in an email — the operator should set the base URL).
+        """
+        prefix = self.public_base_url.rstrip("/")
+        return f"{prefix}/export/download"
 
     @property
     def smtp_configured(self) -> bool:
