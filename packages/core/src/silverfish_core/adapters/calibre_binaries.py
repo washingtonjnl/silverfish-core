@@ -16,6 +16,7 @@ from typing import Protocol, runtime_checkable
 
 EBOOK_CONVERT = "ebook-convert"
 EBOOK_META = "ebook-meta"
+CALIBREDB = "calibredb"
 
 # Default locations Calibre installs into, per OS. Mirrors calibre-web's
 # autodetection (cps/config_sql.py).
@@ -162,6 +163,7 @@ class CalibreBinaries:
         candidates = (bin_dir,) if bin_dir is not None else self._default_search_paths(search_paths)
         self._ebook_convert = self._find(EBOOK_CONVERT, candidates)
         self._ebook_meta = self._find(EBOOK_META, candidates)
+        self._calibredb = self._find(CALIBREDB, candidates)
 
     @property
     def ebook_convert(self) -> Path | None:
@@ -170,6 +172,10 @@ class CalibreBinaries:
     @property
     def ebook_meta(self) -> Path | None:
         return self._ebook_meta
+
+    @property
+    def calibredb(self) -> Path | None:
+        return self._calibredb
 
     def health(self) -> BinaryHealth:
         return BinaryHealth(

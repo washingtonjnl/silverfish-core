@@ -51,6 +51,16 @@ class TestDiscovery:
         binaries = CalibreBinaries(bin_dir=None, search_paths=(fake_macos,))
         assert binaries.ebook_convert == fake_macos / "ebook-convert"
 
+    def test_discovers_calibredb(self, tmp_path: Path) -> None:
+        _make_fake_binary(tmp_path, "calibredb", output="calibre 8.7")
+        binaries = CalibreBinaries(bin_dir=tmp_path)
+        assert binaries.calibredb == tmp_path / "calibredb"
+
+    def test_calibredb_missing_is_none(self, tmp_path: Path) -> None:
+        _make_fake_binary(tmp_path, "ebook-convert")
+        binaries = CalibreBinaries(bin_dir=tmp_path)
+        assert binaries.calibredb is None
+
 
 class TestHealthCheck:
     def test_available_when_both_present(self, tmp_path: Path) -> None:
