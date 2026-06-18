@@ -113,6 +113,13 @@ class Settings(BaseSettings):
     smtp_security: str = Field(default="starttls")
     smtp_max_attachment_mb: int = Field(default=25, ge=1)
 
+    # Calibre export (snapshot a library to a downloadable zip). The zip is
+    # ephemeral: a download link is emailed and the file is deleted once this TTL
+    # passes. export_dir holds in-progress/finished zips (defaults under the
+    # library dir). Export needs SMTP configured to deliver the link.
+    export_ttl_hours: int = Field(default=24, ge=1)
+    export_dir: str = Field(default="")
+
     @property
     def resolved_library_db(self) -> str:
         """The book library's connection string (URL).
@@ -141,6 +148,11 @@ class Settings(BaseSettings):
     def resolved_storage_dir(self) -> Path:
         """Directory for book files. Defaults to ``library_dir`` when unset."""
         return Path(self.storage_dir) if self.storage_dir else self.library_dir
+
+    @property
+    def resolved_export_dir(self) -> Path:
+        """Directory for export zips. Defaults to ``<library_dir>/exports``."""
+        return Path(self.export_dir) if self.export_dir else self.library_dir / "exports"
 
     @property
     def smtp_configured(self) -> bool:
