@@ -80,3 +80,13 @@ class TestSystemDb:
         system.set_config("k", "v")
         assert system.get_config("k") == "v"
         system.close()
+
+    def test_missing_db_driver_gives_a_clear_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A Postgres (or other) URL whose driver isn't installed must fail with
+        # an actionable message — name the extra — not a raw ModuleNotFoundError.
+        monkeypatch.setenv("SILVERFISH_SYSTEM_DB", "postgresql+psycopg2://u:p@localhost/db")
+        settings = _settings(library_dir=tmp_path)
+        with pytest.raises(RuntimeError, match=r"driver|extra|install"):
+            build_system_db(settings)
