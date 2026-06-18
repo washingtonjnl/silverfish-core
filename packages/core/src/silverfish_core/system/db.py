@@ -1,17 +1,22 @@
 """The system database: Silverfish's own persistent store.
 
-Always separate from the book library. In this phase it persists only
-configuration (jobs remain in memory). It is created and owned by our ORM, so
-the same code runs on SQLite (local) or Postgres (robust deployments) — the
-connection string decides which. Schema management is a one-shot ``create_all``:
-the core's schema is fixed, so versioned migrations (Alembic) are deferred until
-a destructive schema change or a production Postgres actually needs them.
+Always separate from the book library. It persists config, job state and export
+tokens. Created and owned by our ORM, so the same code runs on SQLite (local) or
+Postgres (robust deployments) — the connection string decides which. Schema is
+managed by **Alembic migrations** (applied on ``migrate()``), so it evolves
+safely without dropping data when columns/tables change.
 """
 
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session
 
-from silverfish_core.system.models import Config, SystemBase
+from silverfish_core.system.models import Config
+
+_MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 
 class SystemDatabase:
@@ -19,10 +24,23 @@ class SystemDatabase:
 
     def __init__(self, *, conn_string: str) -> None:
         self._engine = create_engine(conn_string)
+        self._conn_string = conn_string
 
+    def migrate(self) -> None:
+        """Bring the schema up to date by applying all pending migrations.
+
+        Idempotent: a fresh database is created, an existing one is upgraded in
+        place (no data loss), and an up-to-date one is a no-op.
+        """
+        cfg = AlembicConfig()
+        cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+        cfg.set_main_option("sqlalchemy.url", self._conn_string)
+        command.upgrade(cfg, "head")
+
+    # Backwards-compatible alias: callers historically called create_schema().
     def create_schema(self) -> None:
-        """Create the system tables if they do not exist (idempotent)."""
-        SystemBase.metadata.create_all(self._engine)
+        """Deprecated name for :meth:`migrate`."""
+        self.migrate()
 
     def session(self) -> Session:
         """Open a new ORM session on the system engine.

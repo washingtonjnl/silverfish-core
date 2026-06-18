@@ -1,10 +1,11 @@
 """SQLAlchemy models for the system database.
 
 The system database is Silverfish's own store, always separate from the book
-library. It holds persistent configuration (key/value) and persisted job state.
-``SystemBase`` is a distinct ``DeclarativeBase`` — separate from the Calibre and
-native book schemas — so ``create_all`` here can never materialise system tables
-inside a book library.
+library. It holds persistent configuration (key/value), job state and export
+tokens. ``SystemBase`` is a distinct ``DeclarativeBase`` — separate from the
+Calibre and native book schemas — so its tables can never be created inside a
+book library. The schema is managed by Alembic migrations (see ``migrations/``),
+so it evolves in place without dropping data.
 """
 
 from sqlalchemy import Float, String

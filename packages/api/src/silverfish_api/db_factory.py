@@ -109,12 +109,12 @@ def _check_driver_available(url: str) -> None:
 
 
 def build_system_db(settings: Settings) -> SystemDatabase:
-    """Build the system store and ensure its schema exists."""
+    """Build the system store and bring its schema up to date (migrations)."""
     url = settings.resolved_system_db
     _check_driver_available(url)
     if _is_sqlite(url):
         # A local SQLite file needs its parent directory to exist first.
         _sqlite_path(url).parent.mkdir(parents=True, exist_ok=True)
     system = SystemDatabase(conn_string=url)
-    system.create_schema()
+    system.migrate()
     return system
