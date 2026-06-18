@@ -28,6 +28,7 @@ _STORAGE_ENV = (
     "SILVERFISH_S3_ACCESS_KEY_ID",
     "SILVERFISH_S3_SECRET_ACCESS_KEY",
     "SILVERFISH_GDRIVE_FOLDER_ID",
+    "SILVERFISH_GDRIVE_FOLDER_NAME",
     "SILVERFISH_GDRIVE_CLIENT_ID",
     "SILVERFISH_GDRIVE_CLIENT_SECRET",
     "SILVERFISH_GDRIVE_REFRESH_TOKEN",
@@ -74,19 +75,20 @@ class TestFactory:
 
 
 class TestGDrive:
-    def test_gdrive_without_folder_raises(
+    def test_gdrive_without_credentials_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")  # no folder/creds
+        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")  # no client id/secret
         settings = load_settings(env_dir=tmp_path)
-        with pytest.raises(ValueError, match=r"GDRIVE_FOLDER_ID|folder"):
+        with pytest.raises(ValueError, match=r"CLIENT_ID|CLIENT_SECRET"):
             build_storage(settings)
 
     def test_gdrive_without_refresh_token_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # folder_id is now optional (the app creates the root folder), but the
+        # OAuth credentials are still required.
         monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
-        monkeypatch.setenv("SILVERFISH_GDRIVE_FOLDER_ID", "folder123")
         monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_ID", "cid")
         monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_SECRET", "csecret")
         settings = load_settings(env_dir=tmp_path)

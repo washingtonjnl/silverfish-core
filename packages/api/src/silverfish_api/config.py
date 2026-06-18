@@ -107,12 +107,16 @@ class Settings(BaseSettings):
     # Google Drive storage, used when storage == "gdrive". The OAuth client +
     # refresh token are obtained out of band (the consent flow is the product's
     # job; for single-tenant use a one-off script) and are secrets (.env.local).
-    # folder_id is the Drive folder the library lives under. Requires the
-    # optional 'gdrive' extra.
+    # The app uses the least-privilege drive.file scope, so it can only touch
+    # folders it created — it creates its own library folder (named
+    # gdrive_folder_name) on first use. Pin gdrive_folder_id to that folder's id
+    # (logged on creation) to reuse it across restarts. Requires the 'gdrive'
+    # extra.
     gdrive_client_id: str = Field(default="")
     gdrive_client_secret: str = Field(default="")
     gdrive_refresh_token: str = Field(default="")
     gdrive_folder_id: str = Field(default="")
+    gdrive_folder_name: str = Field(default="Silverfish Library")
 
     # Per-node id for the Snowflake generator (standalone mode). Distinct values
     # across nodes prevent id collisions; 0 is fine for a single process.

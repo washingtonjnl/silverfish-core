@@ -19,8 +19,10 @@ Usage:
 import os
 import sys
 
-# Full Drive scope: create folders, upload, share. Narrow later if desired.
-_SCOPES = ["https://www.googleapis.com/auth/drive"]
+# Least-privilege scope: the app can only see/manage files and folders it
+# creates (or that you explicitly open with it) — never your whole Drive.
+# Silverfish creates its own library folder, so this is all it needs.
+_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
 def main() -> int:
