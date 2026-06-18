@@ -5,6 +5,7 @@ on startup and includes the routers. Domain behaviour lives in
 ``silverfish_core``; this layer only translates HTTP to/from it.
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -30,6 +31,20 @@ from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
 
+logger = logging.getLogger("silverfish")
+
+# Errors raised by the boot-time factories that are configuration problems for
+# the user to fix, not bugs — these get a clean message instead of a traceback.
+_CONFIG_ERRORS = (FileNotFoundError, NotImplementedError)
+
+
+class StartupError(RuntimeError):
+    """A configuration problem detected while starting the app.
+
+    Raised in place of a low-level error so the failure reads as actionable
+    guidance (one clear line) rather than a deep framework traceback.
+    """
+
 
 class BinaryHealthOut(BaseModel):
     """Availability of the Calibre binaries (optional system dependency)."""
@@ -52,9 +67,17 @@ class HealthResponse(BaseModel):
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Build adapters on startup and dispose them on shutdown."""
     settings = load_settings()
-    repository = build_library_repository(settings)
-    system_db = build_system_db(settings)
-    storage = build_storage(settings)
+    try:
+        repository = build_library_repository(settings)
+        system_db = build_system_db(settings)
+        storage = build_storage(settings)
+    except _CONFIG_ERRORS as exc:
+        # A configuration problem the user can fix, not a bug. Log one clear,
+        # actionable line (no traceback) and abort startup. StartupError is a
+        # plain RuntimeError subtype embedders/tests can catch; the logged
+        # message — not the traceback — is what the operator should read.
+        logger.error("Cannot start Silverfish — %s", exc)
+        raise StartupError(str(exc)) from None
     binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
 
     # EPUB is extracted natively; other formats use ebook-meta when available.

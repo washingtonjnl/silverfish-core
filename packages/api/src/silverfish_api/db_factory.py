@@ -57,8 +57,12 @@ def build_library_repository(settings: Settings) -> MetadataRepository:
         db_path = _sqlite_path(url)
         if not db_path.exists():
             msg = (
-                f"Calibre library not found at {db_path}. In calibre mode the "
-                "metadata.db must already exist; the core never creates it."
+                f"no Calibre library (metadata.db) was found at {db_path}. "
+                "Calibre mode reads an existing library and never creates one. "
+                "Point SILVERFISH_LIBRARY_DIR at a folder that contains a "
+                "metadata.db, or switch to standalone mode "
+                "(SILVERFISH_LIBRARY_MODE=standalone) to have Silverfish create "
+                "and manage its own library."
             )
             raise FileNotFoundError(msg)
         return SqliteCalibreRepository(db_path=db_path)
