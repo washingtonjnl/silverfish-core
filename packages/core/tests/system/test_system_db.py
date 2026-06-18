@@ -66,6 +66,43 @@ class TestIsolation:
         assert SystemBase.metadata is not cs.Base.metadata
         assert SystemBase.metadata is not ns.NativeBase.metadata
 
+
+class TestMigrations:
+    """Schema is managed by Alembic, so it can evolve without dropping data."""
+
+    def _tables(self, db: SystemDatabase) -> set[str]:
+        from sqlalchemy import inspect
+
+        return set(inspect(db._engine).get_table_names())
+
+    def test_migrate_creates_the_current_schema(self, tmp_path: Path) -> None:
+        db = SystemDatabase(conn_string=f"sqlite:///{tmp_path / 's.db'}")
+        db.migrate()
+        tables = self._tables(db)
+        # The current schema (incl. the evolved export_tokens), plus Alembic's
+        # version table that records the applied revision.
+        assert {"config", "jobs", "export_tokens", "alembic_version"} <= tables
+        db.close()
+
+    def test_export_tokens_has_the_current_columns(self, tmp_path: Path) -> None:
+        from sqlalchemy import inspect
+
+        db = SystemDatabase(conn_string=f"sqlite:///{tmp_path / 's.db'}")
+        db.migrate()
+        cols = {c["name"] for c in inspect(db._engine).get_columns("export_tokens")}
+        # The columns the purge sweep relies on (the ones a stale create_all DB
+        # was missing) are present.
+        assert {"token", "location", "remote", "expires_at"} <= cols
+        db.close()
+
+    def test_migrate_is_idempotent(self, tmp_path: Path) -> None:
+        db = SystemDatabase(conn_string=f"sqlite:///{tmp_path / 's.db'}")
+        db.migrate()
+        db.set_config("k", "v")
+        db.migrate()  # running again must not error or wipe data
+        assert db.get_config("k") == "v"
+        db.close()
+
     def test_system_tables_are_not_book_tables(self) -> None:
         system_tables = set(SystemBase.metadata.tables)
         assert "books" not in system_tables
