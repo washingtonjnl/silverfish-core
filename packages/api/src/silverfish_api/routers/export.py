@@ -88,7 +88,9 @@ def start_export(
         report(0.1, "Building Calibre library")
         result = service.run_export(book_ids)
         report(0.9, "Sending download link")
-        active_mailer.send(service.build_ready_email(to_email=to_email, token=result.token))
+        active_mailer.send(
+            service.build_ready_email(to_email=to_email, download_url=result.download_url)
+        )
         report(1.0, "Done")
 
     job_id = job_queue.submit("export", work)

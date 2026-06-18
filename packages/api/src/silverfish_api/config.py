@@ -93,6 +93,17 @@ class Settings(BaseSettings):
     storage: StorageType = Field(default=StorageType.LOCAL)
     storage_dir: str = Field(default="")
 
+    # S3 (or S3-compatible) storage, used when storage == "s3". Credentials are
+    # secrets (.env.local). region/endpoint are optional (endpoint for
+    # S3-compatible providers like MinIO/R2); prefix scopes keys within the
+    # bucket. Requires the optional 's3' extra (boto3).
+    s3_bucket: str = Field(default="")
+    s3_region: str = Field(default="")
+    s3_endpoint_url: str = Field(default="")
+    s3_access_key_id: str = Field(default="")
+    s3_secret_access_key: str = Field(default="")
+    s3_prefix: str = Field(default="")
+
     # Per-node id for the Snowflake generator (standalone mode). Distinct values
     # across nodes prevent id collisions; 0 is fine for a single process.
     machine_id: int = Field(default=0, ge=0)
@@ -121,10 +132,9 @@ class Settings(BaseSettings):
 
     # Calibre export (snapshot a library to a downloadable zip). The zip is
     # ephemeral: a download link is emailed and the file is deleted once this TTL
-    # passes. Kept short by default — the link should be used promptly.
-    # export_dir holds in-progress/finished zips (defaults under the library
-    # dir). Export needs SMTP configured to deliver the link.
-    export_ttl_minutes: int = Field(default=10, ge=1)
+    # passes (default 24h). export_dir holds in-progress/finished zips (defaults
+    # under the library dir). Export needs SMTP configured to deliver the link.
+    export_ttl_minutes: int = Field(default=1440, ge=1)
     export_dir: str = Field(default="")
 
     @property
@@ -160,17 +170,6 @@ class Settings(BaseSettings):
     def resolved_export_dir(self) -> Path:
         """Directory for export zips. Defaults to ``<library_dir>/exports``."""
         return Path(self.export_dir) if self.export_dir else self.library_dir / "exports"
-
-    @property
-    def export_download_base_url(self) -> str:
-        """Absolute base URL for export download links (used in emails).
-
-        Built from ``public_base_url`` + the download route. When
-        ``public_base_url`` is unset, falls back to a relative path (links won't
-        be clickable in an email — the operator should set the base URL).
-        """
-        prefix = self.public_base_url.rstrip("/")
-        return f"{prefix}/export/download"
 
     @property
     def smtp_configured(self) -> bool:

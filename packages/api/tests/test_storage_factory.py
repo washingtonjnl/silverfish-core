@@ -7,20 +7,39 @@ later. The SaaS reuses this same factory per-request; the reference API builds
 one global storage at boot.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from moto import mock_aws
 
 from silverfish_api.config import StorageType, load_settings
 from silverfish_api.storage_factory import build_storage
 from silverfish_core.adapters.storage_local import LocalFileStorage
+from silverfish_core.adapters.storage_s3 import S3Storage
 from silverfish_core.ports import FileStorage
+
+_S3_ENV = (
+    "SILVERFISH_LIBRARY_DIR",
+    "SILVERFISH_STORAGE",
+    "SILVERFISH_S3_BUCKET",
+    "SILVERFISH_S3_REGION",
+    "SILVERFISH_S3_PREFIX",
+    "SILVERFISH_S3_ACCESS_KEY_ID",
+    "SILVERFISH_S3_SECRET_ACCESS_KEY",
+)
 
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in ("SILVERFISH_LIBRARY_DIR", "SILVERFISH_STORAGE"):
+    for key in _S3_ENV:
         monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def _mock_s3() -> Iterator[None]:
+    with mock_aws():
+        yield
 
 
 class TestStorageSetting:
@@ -57,4 +76,27 @@ class TestFactory:
         monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
         settings = load_settings(env_dir=tmp_path)
         with pytest.raises(NotImplementedError, match="gdrive"):
+            build_storage(settings)
+
+
+class TestS3:
+    def test_builds_s3_storage(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _mock_s3: None
+    ) -> None:
+        monkeypatch.setenv("SILVERFISH_STORAGE", "s3")
+        monkeypatch.setenv("SILVERFISH_S3_BUCKET", "my-bucket")
+        monkeypatch.setenv("SILVERFISH_S3_REGION", "us-east-1")
+        monkeypatch.setenv("SILVERFISH_S3_ACCESS_KEY_ID", "test")
+        monkeypatch.setenv("SILVERFISH_S3_SECRET_ACCESS_KEY", "test")
+        settings = load_settings(env_dir=tmp_path)
+        storage = build_storage(settings)
+        assert isinstance(storage, S3Storage)
+        assert isinstance(storage, FileStorage)
+
+    def test_s3_without_bucket_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SILVERFISH_STORAGE", "s3")  # no bucket set
+        settings = load_settings(env_dir=tmp_path)
+        with pytest.raises(ValueError, match=r"S3_BUCKET|bucket"):
             build_storage(settings)

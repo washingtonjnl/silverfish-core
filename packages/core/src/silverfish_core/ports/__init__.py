@@ -11,7 +11,7 @@ from silverfish_core.ports.injector import MetadataInjector
 from silverfish_core.ports.mailer import Mailer
 from silverfish_core.ports.repository import MetadataRepository
 from silverfish_core.ports.source import DataSource
-from silverfish_core.ports.storage import FileStorage
+from silverfish_core.ports.storage import FileStorage, PresignedDownload
 
 __all__ = [
     "Converter",
@@ -21,4 +21,5 @@ __all__ = [
     "MetadataExtractor",
     "MetadataInjector",
     "MetadataRepository",
+    "PresignedDownload",
 ]

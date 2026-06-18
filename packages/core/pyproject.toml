@@ -16,6 +16,9 @@ dependencies = [
 # lean: `uv pip install silverfish-core[postgres]`.
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2"]
+# S3 (or S3-compatible) book-file storage. Kept optional so local/SQLite-only
+# deployments stay lean: `uv pip install silverfish-core[s3]`.
+s3 = ["boto3>=1.35"]
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
