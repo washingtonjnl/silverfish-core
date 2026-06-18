@@ -1,0 +1,41 @@
+{
+  "name": "@silverfish/sdk",
+  "version": "0.11.0",
+  "description": "Official TypeScript client for the Silverfish API, generated from its OpenAPI contract.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js",
+      "require": "./dist/client/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "openapi.json"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "generate": "openapi-ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run generate && npm run build"
+  },
+  "dependencies": {
+    "@hey-api/client-fetch": "^0.13.1"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.98.2",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  }
+}
