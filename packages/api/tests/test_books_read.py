@@ -25,6 +25,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     library.mkdir()
     shutil.copy(FIXTURE_DB, library / "metadata.db")
     monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(library))
+    monkeypatch.setenv("SILVERFISH_LIBRARY_MODE", "calibre")
     with TestClient(create_app()) as test_client:
         yield test_client
 

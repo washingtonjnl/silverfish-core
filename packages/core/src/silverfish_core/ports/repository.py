@@ -67,3 +67,7 @@ class MetadataRepository(Protocol):
     def remove_format(self, book_id: int, book_format: str) -> None:
         """Remove a book's format record (a ``data`` row). Case-insensitive."""
         ...
+
+    def close(self) -> None:
+        """Release the repository's resources (e.g. the database engine)."""
+        ...

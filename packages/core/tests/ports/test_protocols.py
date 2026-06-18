@@ -66,6 +66,9 @@ class FakeRepository:
     def remove_format(self, book_id: int, book_format: str) -> None:
         return None
 
+    def close(self) -> None:
+        return None
+
 
 class FakeStorage:
     def read_book_file(self, path: str) -> bytes:

@@ -31,6 +31,7 @@ def library(tmp_path: Path) -> Path:
 @pytest.fixture
 def client(library: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(library))
+    monkeypatch.setenv("SILVERFISH_LIBRARY_MODE", "calibre")
     with TestClient(create_app()) as test_client:
         yield test_client
 

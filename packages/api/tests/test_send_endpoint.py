@@ -52,6 +52,7 @@ def configured(
     # Run from a clean dir so the developer's real .env.local is not read.
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(library))
+    monkeypatch.setenv("SILVERFISH_LIBRARY_MODE", "calibre")
     mailer = FakeMailer()
     app = create_app()
 
@@ -72,6 +73,7 @@ def unconfigured(
     # Clean dir + cleared env so no .env.local provides SMTP config.
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(library))
+    monkeypatch.setenv("SILVERFISH_LIBRARY_MODE", "calibre")
     monkeypatch.delenv("SILVERFISH_SMTP_HOST", raising=False)
     with TestClient(create_app()) as client:
         yield client
@@ -144,6 +146,7 @@ class TestEmailConfig:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(library))
+        monkeypatch.setenv("SILVERFISH_LIBRARY_MODE", "calibre")
         monkeypatch.setenv("SILVERFISH_SMTP_HOST", "smtp.example.com")
         monkeypatch.setenv("SILVERFISH_SMTP_PORT", "2525")
         monkeypatch.setenv("SILVERFISH_SMTP_PASSWORD", "supersecret")

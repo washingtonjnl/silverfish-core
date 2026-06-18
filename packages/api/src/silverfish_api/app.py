@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from silverfish_api import __version__
 from silverfish_api.config import load_settings
+from silverfish_api.db_factory import build_library_repository, build_system_db
 from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.mailer_factory import build_mailer
 from silverfish_api.routers import books, config, jobs
@@ -22,7 +23,6 @@ from silverfish_core.adapters.convert_calibre import CalibreConverter
 from silverfish_core.adapters.extract_composite import CompositeMetadataExtractor
 from silverfish_core.adapters.extract_ebook_meta import EbookMetaExtractor
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
-from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
@@ -52,7 +52,8 @@ class HealthResponse(BaseModel):
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Build adapters on startup and dispose them on shutdown."""
     settings = load_settings()
-    repository = SqliteCalibreRepository(db_path=settings.metadata_db)
+    repository = build_library_repository(settings)
+    system_db = build_system_db(settings)
     storage = build_storage(settings)
     binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
 
@@ -100,6 +101,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.settings = settings
     app.state.repository = repository
+    app.state.system_db = system_db
     app.state.storage = storage
     app.state.import_service = import_service
     app.state.edit_service = edit_service
@@ -114,6 +116,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         job_queue.stop()
         repository.close()
+        system_db.close()
 
 
 def create_app() -> FastAPI:
