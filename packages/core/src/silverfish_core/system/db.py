@@ -24,6 +24,14 @@ class SystemDatabase:
         """Create the system tables if they do not exist (idempotent)."""
         SystemBase.metadata.create_all(self._engine)
 
+    def session(self) -> Session:
+        """Open a new ORM session on the system engine.
+
+        Lets other system adapters (e.g. the job store) share this database's
+        engine without reaching for it directly.
+        """
+        return Session(self._engine)
+
     def close(self) -> None:
         self._engine.dispose()
 

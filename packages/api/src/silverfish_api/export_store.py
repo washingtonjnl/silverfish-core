@@ -37,6 +37,11 @@ class ExportStore:
         self._entries: dict[str, _Entry] = {}
         self._lock = threading.Lock()
 
+    @property
+    def ttl_seconds(self) -> float:
+        """How long a registered file stays downloadable."""
+        return self._ttl
+
     def register(self, path: Path) -> str:
         """Register a finished file and return a fresh opaque token."""
         token = secrets.token_urlsafe(_TOKEN_BYTES)

@@ -131,7 +131,10 @@ class TestExport:
         exporter.export(dest)
         assert (dest / "metadata.db").exists()
 
-    def test_all_books_present_in_export(self, exporter: CalibreExporter, tmp_path: Path) -> None:
+    def test_all_books_present_when_no_ids_given(
+        self, exporter: CalibreExporter, tmp_path: Path
+    ) -> None:
+        # Omitting book_ids exports the whole library.
         dest = tmp_path / "export"
         result = exporter.export(dest)
         assert result.book_count == 2
@@ -139,6 +142,21 @@ class TestExport:
         page = out.list_books(page=1, page_size=10, sort=SortOrder())
         assert {b.title for b in page.items} == {"The Stand", "It"}
         out.close()
+
+    def test_exports_only_the_given_ids(self, exporter: CalibreExporter, tmp_path: Path) -> None:
+        # Passing a subset exports exactly those books (multi-tenant / collection).
+        dest = tmp_path / "export"
+        result = exporter.export(dest, book_ids=[1])  # The Stand only
+        assert result.book_count == 1
+        out = SqliteCalibreRepository(db_path=dest / "metadata.db")
+        page = out.list_books(page=1, page_size=10, sort=SortOrder())
+        assert {b.title for b in page.items} == {"The Stand"}
+        out.close()
+
+    def test_unknown_ids_are_skipped(self, exporter: CalibreExporter, tmp_path: Path) -> None:
+        dest = tmp_path / "export"
+        result = exporter.export(dest, book_ids=[1, 999])
+        assert result.book_count == 1  # 999 does not exist, skipped
 
     def test_format_file_is_copied(self, exporter: CalibreExporter, tmp_path: Path) -> None:
         dest = tmp_path / "export"

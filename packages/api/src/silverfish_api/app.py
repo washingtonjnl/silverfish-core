@@ -128,7 +128,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Calibre export: available only when calibredb is present. The store holds
     # finished zips behind time-limited tokens; the service runs the export.
-    export_store = ExportStore(ttl_seconds=settings.export_ttl_hours * 3600, clock=time.time)
+    export_store = ExportStore(ttl_seconds=settings.export_ttl_minutes * 60, clock=time.time)
     export_service = (
         ExportService(
             exporter=CalibreExporter(

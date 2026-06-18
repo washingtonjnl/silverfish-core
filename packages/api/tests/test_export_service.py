@@ -23,9 +23,11 @@ class _FakeExporter:
 
     def __init__(self) -> None:
         self.exported_to: Path | None = None
+        self.book_ids: object = "unset"
 
-    def export(self, destination: Path) -> object:
+    def export(self, destination: Path, book_ids: object = None) -> object:
         self.exported_to = destination
+        self.book_ids = book_ids
         destination.mkdir(parents=True, exist_ok=True)
         (destination / "metadata.db").write_bytes(b"calibre db")
         book_dir = destination / "Stephen King" / "It (1)"
