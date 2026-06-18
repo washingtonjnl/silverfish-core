@@ -7,8 +7,10 @@ and exposes them to routers via FastAPI's dependency system. Swapping adapters
 
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Path, Request
 
+from silverfish_api.config import Settings
+from silverfish_api.public_id import PublicIdCodec
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.ports import FileStorage, Mailer, MetadataRepository
 from silverfish_core.services.convert_book import ConvertBookService
@@ -16,6 +18,30 @@ from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
+from silverfish_core.system import SystemDatabase
+
+
+def get_public_id_codec(request: Request) -> PublicIdCodec:
+    """Return a public-id codec configured for the current library mode."""
+    settings = request.app.state.settings
+    if not isinstance(settings, Settings):
+        msg = "Settings are not configured on the application state"
+        raise RuntimeError(msg)
+    return PublicIdCodec(settings.library_mode)
+
+
+def decode_book_id(book_id: Annotated[str, Path()], request: Request) -> int:
+    """Decode a public book id from the path into the internal integer.
+
+    The encoding depends on the library mode (base62 for standalone, decimal for
+    calibre). A malformed id cannot identify any book, so it yields a 404 (not a
+    422) — the resource simply does not exist.
+    """
+    codec = get_public_id_codec(request)
+    try:
+        return codec.decode(book_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Book not found") from exc
 
 
 def get_repository(request: Request) -> MetadataRepository:
@@ -103,6 +129,15 @@ def get_mailer(request: Request) -> Mailer | None:
     return mailer
 
 
+def get_system_db(request: Request) -> SystemDatabase:
+    """Return the process-wide system database from the app state."""
+    system_db = request.app.state.system_db
+    if not isinstance(system_db, SystemDatabase):
+        msg = "System database is not configured on the application state"
+        raise RuntimeError(msg)
+    return system_db
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
@@ -112,3 +147,10 @@ ConvertServiceDep = Annotated[ConvertBookService | None, Depends(get_convert_ser
 RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_service)]
 SendServiceDep = Annotated[SendToEreaderService | None, Depends(get_send_service)]
 MailerDep = Annotated[Mailer | None, Depends(get_mailer)]
+SystemDbDep = Annotated[SystemDatabase, Depends(get_system_db)]
+
+# Decoded internal book id from a public path segment. Routers depend on this
+# instead of declaring ``book_id: int`` so the public id stays opaque.
+BookIdDep = Annotated[int, Depends(decode_book_id)]
+# Public-id codec for the current mode, used to render ids on the way out.
+PublicIdCodecDep = Annotated[PublicIdCodec, Depends(get_public_id_codec)]

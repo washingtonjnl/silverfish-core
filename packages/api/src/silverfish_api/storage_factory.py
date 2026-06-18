@@ -19,7 +19,7 @@ def build_storage(settings: Settings) -> FileStorage:
     wired, so a misconfiguration fails loudly instead of silently degrading.
     """
     if settings.storage is StorageType.LOCAL:
-        return LocalFileStorage(root=settings.library_dir)
+        return LocalFileStorage(root=settings.resolved_storage_dir)
     msg = (
         f"Storage backend '{settings.storage.value}' is not implemented yet. "
         "Only 'local' is available; Drive/S3 are planned."

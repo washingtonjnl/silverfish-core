@@ -55,6 +55,9 @@ class FakeRepository:
     def remove_format(self, book_id: int, book_format: str) -> None:
         raise NotImplementedError
 
+    def close(self) -> None:
+        raise NotImplementedError
+
 
 class FakeStorage:
     def __init__(self, data: bytes = b"EPUBDATA") -> None:

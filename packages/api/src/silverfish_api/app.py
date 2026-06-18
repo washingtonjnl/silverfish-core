@@ -5,6 +5,7 @@ on startup and includes the routers. Domain behaviour lives in
 ``silverfish_core``; this layer only translates HTTP to/from it.
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from silverfish_api import __version__
 from silverfish_api.config import load_settings
+from silverfish_api.db_factory import build_library_repository, build_system_db
 from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.mailer_factory import build_mailer
 from silverfish_api.routers import books, config, jobs
@@ -22,13 +24,26 @@ from silverfish_core.adapters.convert_calibre import CalibreConverter
 from silverfish_core.adapters.extract_composite import CompositeMetadataExtractor
 from silverfish_core.adapters.extract_ebook_meta import EbookMetaExtractor
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
-from silverfish_core.adapters.repo_sqlite_calibre import SqliteCalibreRepository
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
+
+logger = logging.getLogger("silverfish")
+
+# Errors raised by the boot-time factories that are configuration problems for
+# the user to fix, not bugs — these get a clean message instead of a traceback.
+_CONFIG_ERRORS = (FileNotFoundError, NotImplementedError)
+
+
+class StartupError(RuntimeError):
+    """A configuration problem detected while starting the app.
+
+    Raised in place of a low-level error so the failure reads as actionable
+    guidance (one clear line) rather than a deep framework traceback.
+    """
 
 
 class BinaryHealthOut(BaseModel):
@@ -52,8 +67,17 @@ class HealthResponse(BaseModel):
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Build adapters on startup and dispose them on shutdown."""
     settings = load_settings()
-    repository = SqliteCalibreRepository(db_path=settings.metadata_db)
-    storage = build_storage(settings)
+    try:
+        repository = build_library_repository(settings)
+        system_db = build_system_db(settings)
+        storage = build_storage(settings)
+    except _CONFIG_ERRORS as exc:
+        # A configuration problem the user can fix, not a bug. Log one clear,
+        # actionable line (no traceback) and abort startup. StartupError is a
+        # plain RuntimeError subtype embedders/tests can catch; the logged
+        # message — not the traceback — is what the operator should read.
+        logger.error("Cannot start Silverfish — %s", exc)
+        raise StartupError(str(exc)) from None
     binaries = CalibreBinaries(bin_dir=settings.calibre_bin_dir)
 
     # EPUB is extracted natively; other formats use ebook-meta when available.
@@ -100,6 +124,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     app.state.settings = settings
     app.state.repository = repository
+    app.state.system_db = system_db
     app.state.storage = storage
     app.state.import_service = import_service
     app.state.edit_service = edit_service
@@ -114,6 +139,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         job_queue.stop()
         repository.close()
+        system_db.close()
 
 
 def create_app() -> FastAPI:

@@ -11,6 +11,12 @@ dependencies = [
     "defusedxml>=0.7",
 ]
 
+# Optional driver for using Postgres as the system store (or, later, the
+# library). Kept out of the default install so SQLite-only deployments stay
+# lean: `uv pip install silverfish-core[postgres]`.
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2"]
+
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"

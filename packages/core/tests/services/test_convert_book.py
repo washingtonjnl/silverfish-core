@@ -57,6 +57,9 @@ class FakeRepository:
     def cover_path(self, book_id: int) -> str | None:
         raise NotImplementedError
 
+    def close(self) -> None:
+        raise NotImplementedError
+
 
 class FakeStorage:
     def __init__(self) -> None:
