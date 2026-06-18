@@ -38,3 +38,53 @@ jobs:
 
       - name: Pytest
         run: uv run pytest
+
+      - name: OpenAPI spec is in sync with the API
+        # The committed contract (packages/sdk-node/openapi.json) is the source
+        # of truth for the SDKs; fail if the API has drifted from it. The version
+        # field is git-derived (dev vs tag), so it is excluded from the compare.
+        run: |
+          uv run python scripts/export_openapi.py
+          uv run python - <<'PY'
+          import json, subprocess, sys
+          generated = json.load(open("packages/sdk-node/openapi.json"))
+          committed = json.loads(
+              subprocess.check_output(["git", "show", "HEAD:packages/sdk-node/openapi.json"])
+          )
+          generated["info"].pop("version", None)
+          committed["info"].pop("version", None)
+          if generated != committed:
+              print("OpenAPI drift: run scripts/export_openapi.py and commit.", file=sys.stderr)
+              sys.exit(1)
+          print("OpenAPI spec is in sync.")
+          PY
+          git checkout -- packages/sdk-node/openapi.json
+
+  sdk-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/sdk-node/pnpm-lock.yaml
+
+      - name: Install SDK dependencies
+        working-directory: packages/sdk-node
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the client from the OpenAPI contract
+        working-directory: packages/sdk-node
+        run: pnpm run generate
+
+      - name: Build & type-check the SDK
+        working-directory: packages/sdk-node
+        run: pnpm run build

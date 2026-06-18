@@ -1,0 +1,2180 @@
+{
+  "components": {
+    "schemas": {
+      "AuthorOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sort"
+        ],
+        "title": "AuthorOut",
+        "type": "object"
+      },
+      "BinaryHealthOut": {
+        "description": "Availability of the Calibre binaries (optional system dependency).",
+        "properties": {
+          "convert_available": {
+            "title": "Convert Available",
+            "type": "boolean"
+          },
+          "metadata_available": {
+            "title": "Metadata Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "convert_available",
+          "metadata_available"
+        ],
+        "title": "BinaryHealthOut",
+        "type": "object"
+      },
+      "Body_upload_book": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_book",
+        "type": "object"
+      },
+      "BookOut": {
+        "description": "A book as returned by the API.\n\n``id`` is the public form of the book's internal id \u2014 always a string so the\ncontract keeps one shape, but rendered per library mode (short base62 for\nstandalone Snowflake ids, plain decimal for Calibre's small ids).",
+        "properties": {
+          "author_sort": {
+            "title": "Author Sort",
+            "type": "string"
+          },
+          "authors": {
+            "items": {
+              "$ref": "#/components/schemas/AuthorOut"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/FormatOut"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "has_cover": {
+            "title": "Has Cover",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "identifiers": {
+            "items": {
+              "$ref": "#/components/schemas/IdentifierOut"
+            },
+            "title": "Identifiers",
+            "type": "array"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SeriesOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagOut"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "sort",
+          "author_sort",
+          "authors",
+          "tags",
+          "series",
+          "rating",
+          "languages",
+          "publisher",
+          "identifiers",
+          "formats",
+          "has_cover",
+          "cover_url"
+        ],
+        "title": "BookOut",
+        "type": "object"
+      },
+      "BookPage": {
+        "description": "A paginated page of books.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BookOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "total_pages",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "BookPage",
+        "type": "object"
+      },
+      "BookUpdate": {
+        "description": "A partial book metadata update. Only provided fields are changed.\n\nOmitting a field leaves it untouched; sending ``null`` clears it (e.g.\n``rating: null`` removes the rating). Sort keys and the on-disk path are\nrecomputed by the server when title/authors change.",
+        "properties": {
+          "authors": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full author list (replaces the existing one).",
+            "title": "Authors"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Description/notes (HTML allowed), or null to clear.",
+            "title": "Comment"
+          },
+          "languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Language codes (replaces the existing list).",
+            "title": "Languages"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publisher name, or null to clear.",
+            "title": "Publisher"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rating 0-10 (Calibre scale), or null to clear.",
+            "title": "Rating"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Series name, or null to clear.",
+            "title": "Series"
+          },
+          "series_index": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Position within the series.",
+            "title": "Series Index"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full tag list (replaces the existing one).",
+            "title": "Tags"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New title.",
+            "title": "Title"
+          }
+        },
+        "title": "BookUpdate",
+        "type": "object"
+      },
+      "ConvertRequest": {
+        "description": "Request to convert a book from one format to another.",
+        "properties": {
+          "source_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Format to convert from. When omitted, the API picks the best available source by a default priority order.",
+            "title": "Source Format"
+          },
+          "target_format": {
+            "description": "Format to produce, e.g. 'EPUB', 'MOBI', 'AZW3', 'PDF'.",
+            "title": "Target Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_format"
+        ],
+        "title": "ConvertRequest",
+        "type": "object"
+      },
+      "EmailConfigOut": {
+        "description": "Non-secret view of the email configuration (never includes the password).\n\nWhether sending is *available* is reported by ``/health`` (``send_available``);\nthis is the detail view for a settings screen.",
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "from_address": {
+            "title": "From Address",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "security": {
+            "title": "Security",
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "host",
+          "port",
+          "from_address",
+          "security"
+        ],
+        "title": "EmailConfigOut",
+        "type": "object"
+      },
+      "EmailTestRequest": {
+        "description": "Request to send a connectivity test email.",
+        "properties": {
+          "to_email": {
+            "description": "Address to send the SMTP connectivity test email to.",
+            "title": "To Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_email"
+        ],
+        "title": "EmailTestRequest",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "description": "The body of a standardized error.",
+        "properties": {
+          "details": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "description": "A single field-level validation problem.",
+        "properties": {
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Every error the API returns shares this shape: ``{\"error\": {...}}``.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "ExportRequest": {
+        "description": "Request to export the library to a Calibre-format zip.\n\nThe export runs asynchronously; a time-limited download link is emailed to\n``to_email`` when it is ready (the zip is never attached \u2014 a library can be\nfar larger than any mail server accepts).\n\n``book_ids`` selects which books to export (public id strings). Omit it to\nexport the whole library.",
+        "properties": {
+          "book_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public ids of the books to export; omit to export the whole library.",
+            "title": "Book Ids"
+          },
+          "to_email": {
+            "description": "Address that receives the download link when ready.",
+            "title": "To Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_email"
+        ],
+        "title": "ExportRequest",
+        "type": "object"
+      },
+      "FormatOut": {
+        "properties": {
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "extension": {
+            "title": "Extension",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "extension",
+          "size_bytes",
+          "download_url"
+        ],
+        "title": "FormatOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Liveness payload. Typed so it appears in the OpenAPI contract.",
+        "properties": {
+          "binaries": {
+            "$ref": "#/components/schemas/BinaryHealthOut"
+          },
+          "send_available": {
+            "title": "Send Available",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "binaries",
+          "send_available"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "IdentifierOut": {
+        "properties": {
+          "scheme": {
+            "title": "Scheme",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scheme",
+          "value"
+        ],
+        "title": "IdentifierOut",
+        "type": "object"
+      },
+      "JobOut": {
+        "description": "A background job's observable state.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Failure reason when status is 'error', else null.",
+            "title": "Error"
+          },
+          "id": {
+            "description": "Opaque job id; poll it at /jobs/{job_id}.",
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "Human-readable description of the current step.",
+            "title": "Message",
+            "type": "string"
+          },
+          "progress": {
+            "description": "Completion fraction from 0.0 to 1.0.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatusOut",
+            "description": "Current lifecycle state."
+          },
+          "type": {
+            "$ref": "#/components/schemas/JobType",
+            "description": "What kind of work this job performs."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "progress"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      },
+      "JobStatusOut": {
+        "description": "A job's lifecycle state (mirrors the core's JobStatus).",
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "error"
+        ],
+        "title": "JobStatusOut",
+        "type": "string"
+      },
+      "JobType": {
+        "description": "The kind of background work a job performs.",
+        "enum": [
+          "convert",
+          "send",
+          "export"
+        ],
+        "title": "JobType",
+        "type": "string"
+      },
+      "RefreshRequest": {
+        "description": "Request to refresh a book's metadata from one of its format files.",
+        "properties": {
+          "source_format": {
+            "description": "Which existing format to re-read metadata (and cover) from, e.g. 'EPUB'.",
+            "title": "Source Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_format"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
+      "SendRequest": {
+        "description": "Request to send a book to an e-reader email address.",
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Format to send. When omitted, the best available is chosen. Must be a format the book actually has, otherwise the request is rejected.",
+            "title": "Format"
+          },
+          "to_email": {
+            "description": "Destination e-reader address (e.g. your Kindle email).",
+            "title": "To Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_email"
+        ],
+        "title": "SendRequest",
+        "type": "object"
+      },
+      "SeriesOut": {
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "index"
+        ],
+        "title": "SeriesOut",
+        "type": "object"
+      },
+      "SortDirection": {
+        "enum": [
+          "asc",
+          "desc"
+        ],
+        "title": "SortDirection",
+        "type": "string"
+      },
+      "SortField": {
+        "description": "Fields a book listing can be sorted by.",
+        "enum": [
+          "title",
+          "author",
+          "pubdate",
+          "timestamp",
+          "last_modified",
+          "series",
+          "rating"
+        ],
+        "title": "SortField",
+        "type": "string"
+      },
+      "TagOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TagOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "summary": "Open-source core for an ebook library, exposed over HTTP.",
+    "title": "Silverfish API",
+    "version": "0.11.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/books": {
+      "get": {
+        "description": "List books, paginated and sorted.\n\nReturns a page of books controlled by `page` and `page_size`, ordered by\n`sort` field in the given `direction`. Out-of-range pagination values are\nrejected with `422`.",
+        "operationId": "list_books",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortField",
+              "default": "title"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortDirection",
+              "default": "asc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "List Books",
+        "tags": [
+          "books"
+        ]
+      },
+      "post": {
+        "description": "Upload a book file and create a new book.\n\nAccepts a multipart `file` whose extension must be one of the allowed\nupload formats; metadata is extracted from the file on import. Returns the\ncreated book with `201`, or `400` if the file is rejected (unsupported\nextension or unreadable content).",
+        "operationId": "upload_book",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_book"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Upload Book",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}": {
+      "delete": {
+        "description": "Delete a book and all of its files.\n\nRemoves the book identified by `book_id` along with its stored formats and\ncover, returning `204` with no body on success. Responds with `404` when the\nbook does not exist.",
+        "operationId": "delete_book",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Delete Book",
+        "tags": [
+          "books"
+        ]
+      },
+      "get": {
+        "description": "Get a single book by its public id.\n\nLooks up the book identified by `book_id` (the book's public id) and returns\nits full metadata. Responds with `404` when no such book exists.",
+        "operationId": "get_book",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get Book",
+        "tags": [
+          "books"
+        ]
+      },
+      "patch": {
+        "description": "Partially update a book's metadata.\n\nApplies only the fields explicitly set in the request body, leaving omitted\nfields untouched, and returns the updated book. Responds with `400` when the\npatch is empty or violates a domain rule (e.g. an out-of-range `rating`),\nand `404` when the book does not exist.",
+        "operationId": "update_book",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Update Book",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/convert": {
+      "post": {
+        "description": "Convert a book to another format.\n\nEnqueues a background conversion to `target_format`, optionally from an\nexplicit `source_format` (otherwise the best available source is chosen), and\nreturns `202` with a job to poll at `/jobs/{id}`. Responds with `404` if the\nbook is missing, `503` if `ebook-convert` is unavailable, `409` if the target\nformat already exists or an identical conversion is already in progress, and\n`400` if no suitable source format is available.",
+        "operationId": "convert_book",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Convert Book",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/cover": {
+      "get": {
+        "description": "Download a book's cover image.\n\nReturns the cover bytes as `image/jpeg` for the book identified by\n`book_id`. Responds with `404` when the book has no recorded cover or the\ncover file is missing from storage.",
+        "operationId": "get_book_cover",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get Book Cover",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/formats/{book_format}": {
+      "delete": {
+        "description": "Delete one format of a book.\n\nRemoves the file for the given `book_format` of the book identified by\n`book_id`, returning `204` with no body on success. Responds with `404` when\nthe book does not exist or it has no such format.",
+        "operationId": "delete_book_format",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_format",
+            "required": true,
+            "schema": {
+              "title": "Book Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Delete Book Format",
+        "tags": [
+          "books"
+        ]
+      },
+      "get": {
+        "description": "Download one format of a book.\n\nReturns the file for the given `book_format` of the book identified by\n`book_id` as an `application/octet-stream` attachment, with the stored\nfilename in the `Content-Disposition` header. Responds with `404` when the\nbook lacks that format or the file is missing from storage.",
+        "operationId": "download_book_format",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_format",
+            "required": true,
+            "schema": {
+              "title": "Book Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Download Book Format",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/refresh-metadata": {
+      "post": {
+        "description": "Re-extract metadata from a book file and return the updated book.\n\nReads metadata afresh from the book's `source_format` file and merges it in:\nfields the extraction produced replace the current ones, fields it could not\nread are kept. Responds with `404` when the book or requested format is not\nfound, and `400` for any other refresh failure.",
+        "operationId": "refresh_metadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Refresh Metadata",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/send": {
+      "post": {
+        "description": "Email a book to a recipient.\n\nEnqueues a background job to send the book to `to_email` in the requested\n`format` (or the best available sendable format if unspecified), and returns\n`202` with a job to poll at `/jobs/{id}`. Responds with `404` if the book is\nmissing, `503` if SMTP is not configured, and `400` if the book has no\nmatching or sendable format.",
+        "operationId": "send_book",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Send Book",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/config/email": {
+      "get": {
+        "description": "Return the non-secret SMTP settings for display.\n\nReports whether SMTP is `configured` along with `host`, `port`,\n`from_address` (falling back to the username when no explicit from is set)\nand `security`. The password is never read or returned.",
+        "operationId": "get_email_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get Email Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/config/email/test": {
+      "post": {
+        "description": "Send a test email to verify SMTP connectivity.\n\nSends a test message to `to_email` and returns 204 on success. Responds 503\nif SMTP is not configured, or 502 if the connection, authentication or send\nfails.",
+        "operationId": "test_email_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Test Email Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/export/calibre": {
+      "post": {
+        "description": "Start an async Calibre export; the download link is emailed when ready.\n\nEnqueues a background job that snapshots the requested books (or the whole\nlibrary when `book_ids` is omitted) to a zip and emails a time-limited link\nto `to_email`, returning 202 with the new job. Responds 503 when export is\nunavailable (the calibredb binary is missing, SMTP is not configured, or no\npublic base URL is set for an absolute link), and 400 for a malformed book id.",
+        "operationId": "start_export",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Start Export",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/export/download/{token}": {
+      "get": {
+        "description": "Stream a finished export zip for a valid, unexpired token.\n\nServed via ``FileResponse``, which streams the file and honours HTTP Range\nrequests, so a large download is memory-light and resumable.",
+        "operationId": "download_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Download Export",
+        "tags": [
+          "export"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Report liveness and the availability of optional dependencies.\n\nAlways returns `status` ``\"ok\"`` and the API `version`, plus the\nCalibre binary availability (`convert_available`, `metadata_available`)\nand whether send-to-ereader is usable (`send_available`, true when SMTP\nis configured).",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "description": "Return the current status and progress of a single job.\n\nLooks up the job by `job_id` and returns its latest state for one-shot\npolling. Responds 404 if no job with that id exists; use `/jobs/{job_id}/stream`\ninstead to follow progress live.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/jobs/{job_id}/stream": {
+      "get": {
+        "description": "Stream a job's status/progress as Server-Sent Events until it finishes.\n\nOne open connection replaces repeated polling. Updates are event-driven: the\nstream blocks (in a threadpool, so the event loop stays free) until the job\nactually changes, then emits \u2014 so it reflects each new binary output, not a\nfixed tick.",
+        "operationId": "stream_job",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Stream Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "description": "Search books by a text query and filters.\n\nReturns a paginated page of books whose title, author, series or tags match\nthe query `q` (case-insensitive substring match), narrowed by the optional\n`include_tags`, `exclude_tags`, `languages`, `formats`, and\n`rating_min`/`rating_max` filters. Out-of-range pagination or rating values\nare rejected with `422`.",
+        "operationId": "search_books",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_tags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include Tags"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tags",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Tags"
+            }
+          },
+          {
+            "in": "query",
+            "name": "languages",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Languages"
+            }
+          },
+          {
+            "in": "query",
+            "name": "formats",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Formats"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rating Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rating_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rating Max"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Search Books",
+        "tags": [
+          "books"
+        ]
+      }
+    }
+  }
+}

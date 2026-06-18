@@ -30,6 +30,9 @@ dev = [
 
 [tool.uv.workspace]
 members = ["packages/*"]
+# sdk-node is a TypeScript package (its own npm/pnpm toolchain), not a Python
+# workspace member — exclude it so uv doesn't expect a pyproject.toml there.
+exclude = ["packages/sdk-node"]
 
 [tool.uv.sources]
 silverfish-core = { workspace = true }
