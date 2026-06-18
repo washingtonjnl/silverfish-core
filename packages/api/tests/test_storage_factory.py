@@ -19,7 +19,7 @@ from silverfish_core.adapters.storage_local import LocalFileStorage
 from silverfish_core.adapters.storage_s3 import S3Storage
 from silverfish_core.ports import FileStorage
 
-_S3_ENV = (
+_STORAGE_ENV = (
     "SILVERFISH_LIBRARY_DIR",
     "SILVERFISH_STORAGE",
     "SILVERFISH_S3_BUCKET",
@@ -27,12 +27,17 @@ _S3_ENV = (
     "SILVERFISH_S3_PREFIX",
     "SILVERFISH_S3_ACCESS_KEY_ID",
     "SILVERFISH_S3_SECRET_ACCESS_KEY",
+    "SILVERFISH_GDRIVE_FOLDER_ID",
+    "SILVERFISH_GDRIVE_FOLDER_NAME",
+    "SILVERFISH_GDRIVE_CLIENT_ID",
+    "SILVERFISH_GDRIVE_CLIENT_SECRET",
+    "SILVERFISH_GDRIVE_REFRESH_TOKEN",
 )
 
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in _S3_ENV:
+    for key in _STORAGE_ENV:
         monkeypatch.delenv(key, raising=False)
 
 
@@ -68,14 +73,37 @@ class TestFactory:
         storage.write_book_file("Author/Book (1)/book.epub", b"data")
         assert (tmp_path / "Author" / "Book (1)" / "book.epub").read_bytes() == b"data"
 
-    def test_unimplemented_backend_raises_clear_error(
+
+class TestGDrive:
+    def test_gdrive_without_credentials_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Selecting a backend that exists in the enum but is not wired yet must
-        # fail loudly, not silently fall back.
-        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
+        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")  # no client id/secret
         settings = load_settings(env_dir=tmp_path)
-        with pytest.raises(NotImplementedError, match="gdrive"):
+        with pytest.raises(ValueError, match=r"CLIENT_ID|CLIENT_SECRET"):
+            build_storage(settings)
+
+    def test_gdrive_without_refresh_token_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_ID", "cid")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_SECRET", "csecret")
+        settings = load_settings(env_dir=tmp_path)
+        with pytest.raises(ValueError, match=r"REFRESH_TOKEN|refresh"):
+            build_storage(settings)
+
+    def test_gdrive_without_folder_id_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The adapter takes a ready folder id; deciding/creating it is the
+        # consumer's job, so a missing id is a clear configuration error.
+        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_ID", "cid")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_REFRESH_TOKEN", "rtok")
+        settings = load_settings(env_dir=tmp_path)
+        with pytest.raises(ValueError, match=r"FOLDER_ID|folder"):
             build_storage(settings)
 
 

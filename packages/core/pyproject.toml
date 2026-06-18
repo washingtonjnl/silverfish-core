@@ -19,6 +19,15 @@ postgres = ["psycopg[binary]>=3.2"]
 # S3 (or S3-compatible) book-file storage. Kept optional so local/SQLite-only
 # deployments stay lean: `uv pip install silverfish-core[s3]`.
 s3 = ["boto3>=1.35"]
+# Google Drive book-file storage. `uv pip install silverfish-core[gdrive]`.
+# google-auth-oauthlib + python-dotenv are for the one-off
+# scripts/gdrive_authorize.py helper (consent flow; reads creds from .env).
+gdrive = [
+    "google-api-python-client>=2.140",
+    "google-auth>=2.34",
+    "google-auth-oauthlib>=1.2",
+    "python-dotenv>=1.0",
+]
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]

@@ -20,6 +20,7 @@ from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.export_service import ExportService
 from silverfish_api.export_store import ExportStore
 from silverfish_api.mailer_factory import build_mailer
+from silverfish_api.purge_scheduler import PurgeScheduler
 from silverfish_api.routers import books, config, export, jobs
 from silverfish_api.storage_factory import build_storage
 from silverfish_core.adapters.calibre_binaries import CalibreBinaries, SubprocessRunner
@@ -135,7 +136,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         database=system_db,
         ttl_seconds=settings.export_ttl_minutes * 60,
         clock=time.time,
+        storage=storage,
     )
+    # Sweep expired export files (local and remote) on a background thread.
+    purge_scheduler = PurgeScheduler(
+        store=export_store,
+        interval_seconds=settings.export_purge_interval_minutes * 60,
+    )
+    purge_scheduler.start()
     export_service = (
         ExportService(
             exporter=CalibreExporter(
@@ -167,9 +175,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.send_service = send_service
     app.state.export_store = export_store
     app.state.export_service = export_service
+    app.state.purge_scheduler = purge_scheduler
     try:
         yield
     finally:
+        purge_scheduler.stop()
         job_queue.stop()
         repository.close()
         system_db.close()

@@ -102,10 +102,10 @@ class TestDelete:
         storage.delete("not/there.epub")  # must not raise
 
 
-class TestPresignedUrl:
+class TestDownloadLink:
     def test_generates_a_url_for_an_object(self, storage: S3Storage) -> None:
         storage.write_book_file("exports/lib.zip", b"ZIPDATA")
-        url = storage.presigned_url("exports/lib.zip", expires_in=600)
+        url = storage.download_link("exports/lib.zip", expires_in=600)
         assert url.startswith("http")
         # The URL targets the object key (under the prefix) and is signed.
         assert "lib.zip" in url
@@ -113,7 +113,7 @@ class TestPresignedUrl:
 
     def test_url_respects_traversal_guard(self, storage: S3Storage) -> None:
         with pytest.raises(ValueError, match=r"raversal|escape"):
-            storage.presigned_url("../escape.zip", expires_in=600)
+            storage.download_link("../escape.zip", expires_in=600)
 
 
 class TestTraversal:

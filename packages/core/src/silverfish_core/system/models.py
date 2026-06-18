@@ -43,14 +43,18 @@ class JobRecord(SystemBase):
 
 
 class ExportToken(SystemBase):
-    """A download token for a finished export zip, with its file and expiry.
+    """A finished export zip's location and expiry, keyed by an opaque token.
 
     Persisted so an emitted link survives a restart/deploy (an in-memory map
-    would be lost, 404-ing every previously-emailed link). ``expires_at`` is an
-    absolute epoch second; cleanup deletes rows past it.
+    would be lost, 404-ing every previously-emailed link) and so expiry can
+    delete the file wherever it lives. ``remote`` distinguishes a local disk
+    path from a storage key (S3/Drive); when remote, ``location`` is the storage
+    key and cleanup deletes it through the storage adapter. ``expires_at`` is an
+    absolute epoch second; cleanup deletes rows (and files) past it.
     """
 
     __tablename__ = "export_tokens"
     token: Mapped[str] = mapped_column(String, primary_key=True)
-    path: Mapped[str] = mapped_column(String)
+    location: Mapped[str] = mapped_column(String)
+    remote: Mapped[bool] = mapped_column(default=False)
     expires_at: Mapped[float] = mapped_column(Float, index=True)

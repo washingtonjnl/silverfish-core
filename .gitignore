@@ -31,3 +31,6 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# Local runtime data (default standalone library, exports, system db)
+/silverfish-library/
