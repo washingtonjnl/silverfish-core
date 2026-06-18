@@ -49,7 +49,9 @@ class TestUpload:
         body = response.json()
         assert body["title"] == "The Hobbit"
         assert [a["name"] for a in body["authors"]] == ["J. R. R. Tolkien"]
-        assert body["id"] > 0
+        # The public id is a non-empty base62 string.
+        assert isinstance(body["id"], str)
+        assert body["id"]
 
     def test_uploaded_book_is_listed(self, client: TestClient) -> None:
         _upload(client)

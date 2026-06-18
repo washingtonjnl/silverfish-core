@@ -7,8 +7,9 @@ and exposes them to routers via FastAPI's dependency system. Swapping adapters
 
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Path, Request
 
+from silverfish_core.ids import decode_base62
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.ports import FileStorage, Mailer, MetadataRepository
 from silverfish_core.services.convert_book import ConvertBookService
@@ -17,6 +18,18 @@ from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
 from silverfish_core.system import SystemDatabase
+
+
+def decode_book_id(book_id: Annotated[str, Path()]) -> int:
+    """Decode a public base62 book id from the path into the internal integer.
+
+    A malformed id cannot identify any book, so it yields a 404 (not a 422) —
+    the resource simply does not exist.
+    """
+    try:
+        return decode_base62(book_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Book not found") from exc
 
 
 def get_repository(request: Request) -> MetadataRepository:
@@ -123,3 +136,7 @@ RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_servic
 SendServiceDep = Annotated[SendToEreaderService | None, Depends(get_send_service)]
 MailerDep = Annotated[Mailer | None, Depends(get_mailer)]
 SystemDbDep = Annotated[SystemDatabase, Depends(get_system_db)]
+
+# Decoded internal book id from a public base62 path segment. Routers depend on
+# this instead of declaring ``book_id: int`` so the public id stays opaque.
+BookIdDep = Annotated[int, Depends(decode_book_id)]

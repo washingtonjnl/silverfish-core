@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, status
 
 from silverfish_api.deps import (
+    BookIdDep,
     ConvertServiceDep,
     EditServiceDep,
     ImportServiceDep,
@@ -152,7 +153,7 @@ def list_books(
 
 
 @router.get("/books/{book_id}", response_model=BookOut, responses=_GET_ERRORS)
-def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
+def get_book(book_id: BookIdDep, repository: RepositoryDep) -> BookOut:
     book = repository.get_book(book_id)
     if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -161,7 +162,7 @@ def get_book(book_id: int, repository: RepositoryDep) -> BookOut:
 
 @router.patch("/books/{book_id}", response_model=BookOut, responses=_PATCH_ERRORS)
 def update_book(
-    book_id: int, patch: BookUpdate, repository: RepositoryDep, edit_service: EditServiceDep
+    book_id: BookIdDep, patch: BookUpdate, repository: RepositoryDep, edit_service: EditServiceDep
 ) -> BookOut:
     if not patch.model_fields_set:
         raise HTTPException(
@@ -186,7 +187,9 @@ def update_book(
     status_code=status.HTTP_204_NO_CONTENT,
     responses={**ERROR_404, **ERROR_500},
 )
-def delete_book(book_id: int, repository: RepositoryDep, edit_service: EditServiceDep) -> Response:
+def delete_book(
+    book_id: BookIdDep, repository: RepositoryDep, edit_service: EditServiceDep
+) -> Response:
     if repository.get_book(book_id) is None:
         raise HTTPException(status_code=404, detail="Book not found")
     edit_service.delete_book(book_id)
@@ -226,7 +229,7 @@ def _apply_update(book: Book, patch: BookUpdate) -> Book:
     responses={**ERROR_404, **ERROR_500},
     response_class=Response,
 )
-def get_book_cover(book_id: int, repository: RepositoryDep, storage: StorageDep) -> Response:
+def get_book_cover(book_id: BookIdDep, repository: RepositoryDep, storage: StorageDep) -> Response:
     relative = repository.cover_path(book_id)
     data = _read_or_none(storage, relative)
     if data is None:
@@ -240,7 +243,7 @@ def get_book_cover(book_id: int, repository: RepositoryDep, storage: StorageDep)
     response_class=Response,
 )
 def download_book_format(
-    book_id: int, book_format: str, repository: RepositoryDep, storage: StorageDep
+    book_id: BookIdDep, book_format: str, repository: RepositoryDep, storage: StorageDep
 ) -> Response:
     relative = repository.format_path(book_id, book_format)
     data = _read_or_none(storage, relative)
@@ -260,7 +263,7 @@ def download_book_format(
     responses={**ERROR_404, **ERROR_500},
 )
 def delete_book_format(
-    book_id: int, book_format: str, repository: RepositoryDep, edit_service: EditServiceDep
+    book_id: BookIdDep, book_format: str, repository: RepositoryDep, edit_service: EditServiceDep
 ) -> Response:
     if repository.get_book(book_id) is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -276,7 +279,7 @@ def delete_book_format(
     responses={**ERROR_400, **ERROR_404, **ERROR_409, **ERROR_422, **ERROR_503, **ERROR_500},
 )
 def convert_book(
-    book_id: int,
+    book_id: BookIdDep,
     request: ConvertRequest,
     repository: RepositoryDep,
     convert_service: ConvertServiceDep,
@@ -343,7 +346,7 @@ def convert_book(
     responses={**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_500},
 )
 def refresh_metadata(
-    book_id: int, request: RefreshRequest, refresh_service: RefreshServiceDep
+    book_id: BookIdDep, request: RefreshRequest, refresh_service: RefreshServiceDep
 ) -> BookOut:
     try:
         book = refresh_service.refresh(book_id=book_id, source_format=request.source_format)
@@ -361,7 +364,7 @@ def refresh_metadata(
     responses={**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_503, **ERROR_500},
 )
 def send_book(
-    book_id: int,
+    book_id: BookIdDep,
     request: SendRequest,
     repository: RepositoryDep,
     send_service: SendServiceDep,

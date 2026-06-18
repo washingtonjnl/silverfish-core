@@ -8,6 +8,7 @@ plain DTOs mapped from the neutral domain models.
 from pydantic import BaseModel, Field
 
 from silverfish_core.domain.models import Book
+from silverfish_core.ids import encode_base62
 
 
 class ErrorDetail(BaseModel):
@@ -58,9 +59,14 @@ class FormatOut(BaseModel):
 
 
 class BookOut(BaseModel):
-    """A book as returned by the API."""
+    """A book as returned by the API.
 
-    id: int
+    ``id`` is the public, URL-friendly base62 form of the book's internal
+    64-bit id (Instagram-style). It is always a string so the contract does not
+    change shape between library modes.
+    """
+
+    id: str
     title: str
     sort: str
     author_sort: str
@@ -78,7 +84,8 @@ class BookOut(BaseModel):
 
     @classmethod
     def from_domain(cls, book: Book) -> "BookOut":
-        book_id = book.id if book.id is not None else 0
+        internal_id = book.id if book.id is not None else 0
+        book_id = encode_base62(internal_id)
         return cls(
             id=book_id,
             title=book.title,

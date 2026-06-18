@@ -59,7 +59,8 @@ class TestGetBook:
         response = client.get("/books/1")
         assert response.status_code == 200
         body = response.json()
-        assert body["id"] == 1
+        # The public id is a string (base62); for id 1 it reads as "1".
+        assert body["id"] == "1"
         assert body["title"] == "The Great Book"
         assert body["rating"] == 6
         assert [a["name"] for a in body["authors"]] == ["Jane Austen"]
