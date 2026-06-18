@@ -2,7 +2,8 @@
 /src/
 # Compiled output (published to npm, built from src).
 /dist/
-node_modules/
+# Dependencies (any depth).
+node_modules
 *.tsbuildinfo
 # Hey API drops an error log here when generation fails — transient.
 openapi-ts-error-*.log

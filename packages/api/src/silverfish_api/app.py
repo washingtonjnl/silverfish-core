@@ -40,9 +40,10 @@ from silverfish_core.system.job_store import SqlJobStore
 
 logger = logging.getLogger("silverfish")
 
-# Errors raised by the boot-time factories that are configuration problems for
-# the user to fix, not bugs — these get a clean message instead of a traceback.
-_CONFIG_ERRORS = (FileNotFoundError, NotImplementedError)
+# Errors the boot-time factories raise for configuration problems the user can
+# fix (missing file, unsupported backend, missing field, uninstalled DB driver).
+# These get a clean, actionable message instead of a deep traceback.
+_CONFIG_ERRORS = (FileNotFoundError, NotImplementedError, ValueError, RuntimeError)
 
 
 class StartupError(RuntimeError):

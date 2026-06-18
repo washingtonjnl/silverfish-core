@@ -84,9 +84,34 @@ def build_library_repository(settings: Settings) -> MetadataRepository:
     return SqlNativeRepository(conn_string=url, id_generator=generator)
 
 
+def _check_driver_available(url: str) -> None:
+    """Fail early with an actionable message if the DB driver isn't installed.
+
+    SQLAlchemy only imports the DBAPI driver lazily (on connect/engine create),
+    so a Postgres URL without psycopg otherwise surfaces as a raw
+    ``ModuleNotFoundError`` deep in a traceback. Name the fix instead.
+    """
+    backend = make_url(url).get_backend_name()
+    if backend == "sqlite":
+        return
+    try:
+        # get_dialect() loads the dialect; import_dbapi() then imports the actual
+        # driver module (psycopg/…) — which is the import that can be missing.
+        make_url(url).get_dialect().import_dbapi()
+    except ModuleNotFoundError as exc:
+        hint = (
+            " Install the 'postgres' extra: pip install silverfish-core[postgres]."
+            if backend in ("postgresql", "postgres")
+            else ""
+        )
+        msg = f"Database driver for '{backend}' is not installed.{hint}"
+        raise RuntimeError(msg) from exc
+
+
 def build_system_db(settings: Settings) -> SystemDatabase:
     """Build the system store and ensure its schema exists."""
     url = settings.resolved_system_db
+    _check_driver_available(url)
     if _is_sqlite(url):
         # A local SQLite file needs its parent directory to exist first.
         _sqlite_path(url).parent.mkdir(parents=True, exist_ok=True)
