@@ -1,4 +1,4 @@
-# @silverfish/sdk
+# @silverfish-app/sdk
 
 Official TypeScript client for the [Silverfish](../../README.md) API, **generated
 from its OpenAPI contract** — it is a typed HTTP client and nothing more (no
@@ -10,8 +10,8 @@ client is regenerated from it, so the SDK always matches the API.
 ## Install
 
 ```bash
-npm install @silverfish/sdk
-# or: pnpm add @silverfish/sdk
+npm install @silverfish-app/sdk
+# or: pnpm add @silverfish-app/sdk
 ```
 
 ## Usage
@@ -19,8 +19,8 @@ npm install @silverfish/sdk
 Create a client pointed at your Silverfish API, then call the typed methods:
 
 ```ts
-import { Sdk } from '@silverfish/sdk';
-import { createClient, createConfig } from '@silverfish/sdk/client';
+import { Sdk } from '@silverfish-app/sdk';
+import { createClient, createConfig } from '@silverfish-app/sdk/client';
 
 const sdk = new Sdk({
   client: createClient(createConfig({ baseUrl: 'http://localhost:8000' })),
