@@ -86,13 +86,24 @@ class TestGDrive:
     def test_gdrive_without_refresh_token_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # folder_id is now optional (the app creates the root folder), but the
-        # OAuth credentials are still required.
         monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
         monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_ID", "cid")
         monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_SECRET", "csecret")
         settings = load_settings(env_dir=tmp_path)
         with pytest.raises(ValueError, match=r"REFRESH_TOKEN|refresh"):
+            build_storage(settings)
+
+    def test_gdrive_without_folder_id_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The adapter takes a ready folder id; deciding/creating it is the
+        # consumer's job, so a missing id is a clear configuration error.
+        monkeypatch.setenv("SILVERFISH_STORAGE", "gdrive")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_ID", "cid")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_CLIENT_SECRET", "csecret")
+        monkeypatch.setenv("SILVERFISH_GDRIVE_REFRESH_TOKEN", "rtok")
+        settings = load_settings(env_dir=tmp_path)
+        with pytest.raises(ValueError, match=r"FOLDER_ID|folder"):
             build_storage(settings)
 
 

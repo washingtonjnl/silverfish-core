@@ -7,14 +7,11 @@ global default. Adding a backend means wiring it here only — the core never
 changes.
 """
 
-import logging
 from typing import assert_never
 
 from silverfish_api.config import Settings, StorageType
 from silverfish_core.adapters.storage_local import LocalFileStorage
 from silverfish_core.ports import FileStorage
-
-logger = logging.getLogger("silverfish")
 
 
 def build_storage(settings: Settings) -> FileStorage:
@@ -67,18 +64,28 @@ def _build_s3(settings: Settings) -> FileStorage:
 def _build_gdrive(settings: Settings) -> FileStorage:
     """Build a Google Drive storage adapter from OAuth config.
 
-    Uses the least-privilege ``drive.file`` scope, so the app only touches
-    folders it created. The library root folder is the configured
-    ``gdrive_folder_id`` when set; otherwise it is created (by name) under My
-    Drive and its id is logged so it can be pinned. The OAuth consent flow that
-    produces the refresh token is out of band. ``google-api-python-client``/
-    ``google-auth`` are the optional 'gdrive' extra.
+    The adapter receives a ready ``root_folder_id`` — it does not create folders
+    or decide which one to use: that is the consumer's job (a single-tenant
+    product remembers one folder; a multi-tenant SaaS resolves the tenant's
+    folder per request). Here the reference API simply passes the configured id.
+    Uses the least-privilege ``drive.file`` scope (the app only touches folders
+    it created), so the folder must have been created by this app — e.g. via
+    ``scripts/gdrive_authorize.py``, which prints both the refresh token and the
+    folder id. ``google-api-python-client``/``google-auth`` are the optional
+    'gdrive' extra.
     """
     if not (settings.gdrive_client_id and settings.gdrive_client_secret):
         msg = "Google Drive storage requires GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET."
         raise ValueError(msg)
     if not settings.gdrive_refresh_token:
         msg = "Google Drive storage requires SILVERFISH_GDRIVE_REFRESH_TOKEN to be set."
+        raise ValueError(msg)
+    if not settings.gdrive_folder_id:
+        msg = (
+            "Google Drive storage requires SILVERFISH_GDRIVE_FOLDER_ID. Create the "
+            "library folder once with scripts/gdrive_authorize.py and set the id it "
+            "prints."
+        )
         raise ValueError(msg)
     try:
         from google.oauth2.credentials import Credentials
@@ -99,32 +106,6 @@ def _build_gdrive(settings: Settings) -> FileStorage:
         token_uri="https://oauth2.googleapis.com/token",  # noqa: S106 - public OAuth endpoint, not a secret
     )
     service = build("drive", "v3", credentials=credentials, cache_discovery=False)
-    client = GoogleDriveClient(service)
-    root_id = _ensure_gdrive_root(client, settings)
-    return GDriveStorage(client=client, root_folder_id=root_id)
-
-
-def _ensure_gdrive_root(client: object, settings: Settings) -> str:
-    """Return the library root folder id, creating it under My Drive if needed.
-
-    With the drive.file scope the app cannot use a pre-existing folder it did not
-    create, so when no id is configured we create one by name and log its id for
-    the operator to pin in ``gdrive_folder_id``.
-    """
-    from silverfish_core.adapters.gdrive_client import GoogleDriveClient
-
-    assert isinstance(client, GoogleDriveClient)  # noqa: S101 - internal call site
-    if settings.gdrive_folder_id:
-        return settings.gdrive_folder_id
-    existing = client.find_child(settings.gdrive_folder_name, "root")
-    if existing is not None:
-        return existing
-    folder_id = client.create_folder(settings.gdrive_folder_name, "root")
-    logger.warning(
-        "Created Google Drive library folder %r (id=%s). Set "
-        "SILVERFISH_GDRIVE_FOLDER_ID=%s to reuse it.",
-        settings.gdrive_folder_name,
-        folder_id,
-        folder_id,
+    return GDriveStorage(
+        client=GoogleDriveClient(service), root_folder_id=settings.gdrive_folder_id
     )
-    return folder_id

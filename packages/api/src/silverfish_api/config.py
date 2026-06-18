@@ -104,19 +104,18 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = Field(default="")
     s3_prefix: str = Field(default="")
 
-    # Google Drive storage, used when storage == "gdrive". The OAuth client +
-    # refresh token are obtained out of band (the consent flow is the product's
-    # job; for single-tenant use a one-off script) and are secrets (.env.local).
-    # The app uses the least-privilege drive.file scope, so it can only touch
-    # folders it created — it creates its own library folder (named
-    # gdrive_folder_name) on first use. Pin gdrive_folder_id to that folder's id
-    # (logged on creation) to reuse it across restarts. Requires the 'gdrive'
-    # extra.
+    # Google Drive storage, used when storage == "gdrive". The adapter receives a
+    # ready folder id; it does not create folders or decide which to use (that is
+    # the consumer's job — single-tenant remembers one, a SaaS resolves per
+    # tenant). The OAuth client + refresh token + folder id are obtained out of
+    # band: scripts/gdrive_authorize.py runs the consent flow, creates the
+    # library folder (drive.file scope — the app only touches what it created),
+    # and prints both the refresh token and the folder id. All are secrets
+    # (.env.local). Requires the 'gdrive' extra.
     gdrive_client_id: str = Field(default="")
     gdrive_client_secret: str = Field(default="")
     gdrive_refresh_token: str = Field(default="")
     gdrive_folder_id: str = Field(default="")
-    gdrive_folder_name: str = Field(default="Silverfish Library")
 
     # Per-node id for the Snowflake generator (standalone mode). Distinct values
     # across nodes prevent id collisions; 0 is fine for a single process.

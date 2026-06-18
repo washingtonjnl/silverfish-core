@@ -64,9 +64,36 @@ def main() -> int:
         )
         return 1
 
-    print("\nAdd this to .env.local:\n")
+    # Create the library folder now (with the same app/scope), so the operator
+    # gets a ready folder id instead of hunting for one. The app can later use
+    # this folder because drive.file grants access to what it created.
+    folder_name = os.environ.get("SILVERFISH_GDRIVE_FOLDER_NAME", "Silverfish Library")
+    folder_id = _create_library_folder(credentials, folder_name)
+
+    print("\nAdd these to .env.local:\n")
     print(f"SILVERFISH_GDRIVE_REFRESH_TOKEN={credentials.refresh_token}")
+    print(f"SILVERFISH_GDRIVE_FOLDER_ID={folder_id}")
     return 0
+
+
+def _create_library_folder(credentials: object, folder_name: str) -> str:
+    """Create the Drive library folder under My Drive and return its id."""
+    from googleapiclient.discovery import build
+
+    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+    created = (
+        service.files()
+        .create(
+            body={
+                "name": folder_name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": ["root"],
+            },
+            fields="id",
+        )
+        .execute()
+    )
+    return str(created["id"])
 
 
 if __name__ == "__main__":
