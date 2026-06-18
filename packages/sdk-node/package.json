@@ -1,6 +1,6 @@
 {
   "name": "@silverfish/sdk",
-  "version": "0.11.0",
+  "version": "1.0.0",
   "description": "Official TypeScript client for the Silverfish API, generated from its OpenAPI contract.",
   "license": "GPL-3.0-or-later",
   "type": "module",
