@@ -23,13 +23,18 @@ from silverfish_core.services.send_to_ereader import SendToEreaderService
 from silverfish_core.system import SystemDatabase
 
 
-def get_public_id_codec(request: Request) -> PublicIdCodec:
-    """Return a public-id codec configured for the current library mode."""
+def get_settings(request: Request) -> Settings:
+    """Return the process-wide resolved settings from the app state."""
     settings = request.app.state.settings
     if not isinstance(settings, Settings):
         msg = "Settings are not configured on the application state"
         raise RuntimeError(msg)
-    return PublicIdCodec(settings.library_mode)
+    return settings
+
+
+def get_public_id_codec(request: Request) -> PublicIdCodec:
+    """Return a public-id codec configured for the current library mode."""
+    return PublicIdCodec(get_settings(request).library_mode)
 
 
 def decode_book_id(book_id: Annotated[str, Path()], request: Request) -> int:
@@ -158,6 +163,7 @@ def get_export_store(request: Request) -> "ExportStore":
     return store
 
 
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]

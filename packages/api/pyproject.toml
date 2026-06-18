@@ -9,6 +9,7 @@ dependencies = [
     "silverfish-core",
     "fastapi>=0.121",
     "uvicorn[standard]>=0.40",
+    "pydantic[email]>=2.10",
     "pydantic-settings>=2.7",
     "python-multipart>=0.0.18",
 ]

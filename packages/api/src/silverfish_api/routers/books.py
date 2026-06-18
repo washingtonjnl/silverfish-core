@@ -15,12 +15,14 @@ from silverfish_api.deps import (
     RefreshServiceDep,
     RepositoryDep,
     SendServiceDep,
+    SettingsDep,
     StorageDep,
 )
 from silverfish_api.errors import (
     ERROR_400,
     ERROR_404,
     ERROR_409,
+    ERROR_413,
     ERROR_422,
     ERROR_500,
     ERROR_503,
@@ -102,12 +104,45 @@ ALLOWED_UPLOAD_EXTENSIONS = (
 # 404; a by-id lookup adds 404. Upload adds 400 for a rejected file.
 _LIST_ERRORS = {**ERROR_422, **ERROR_500}
 _GET_ERRORS = {**ERROR_404, **ERROR_422, **ERROR_500}
-_UPLOAD_ERRORS = {**ERROR_400, **ERROR_422, **ERROR_500}
+_UPLOAD_ERRORS = {**ERROR_400, **ERROR_413, **ERROR_422, **ERROR_500}
+
+# Read the upload body in chunks so an oversized file is rejected without ever
+# being fully materialised in memory.
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload fully, or raise 413 once it exceeds *max_bytes*.
+
+    Reads in chunks and stops at the first byte over the ceiling, so a hostile
+    multi-gigabyte upload never lands entirely in RAM.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail="Uploaded file is too large.",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 # PATCH can 404 (missing book), 400 (empty patch) or 422 (bad field types).
 _PATCH_ERRORS = {**ERROR_400, **ERROR_404, **ERROR_422, **ERROR_500}
 
 PageParam = Annotated[int, Query(ge=1)]
 PageSizeParam = Annotated[int, Query(ge=1, le=200)]
+
+# Upper bound on how many values a single search filter list may carry. Real
+# queries use a handful; a flood of repeated params is rejected with 422 so it
+# can't drive a pathological query.
+_MAX_FILTER_VALUES = 100
 
 
 def _to_page(page: Page[Book], codec: PublicIdCodec) -> BookPage:
@@ -129,16 +164,20 @@ def _to_page(page: Page[Book], codec: PublicIdCodec) -> BookPage:
     responses=_UPLOAD_ERRORS,
 )
 async def upload_book(
-    file: UploadFile, import_service: ImportServiceDep, codec: PublicIdCodecDep
+    file: UploadFile,
+    import_service: ImportServiceDep,
+    codec: PublicIdCodecDep,
+    settings: SettingsDep,
 ) -> BookOut:
     """Upload a book file and create a new book.
 
     Accepts a multipart `file` whose extension must be one of the allowed
     upload formats; metadata is extracted from the file on import. Returns the
-    created book with `201`, or `400` if the file is rejected (unsupported
-    extension or unreadable content).
+    created book with `201`, `400` if the file is rejected (unsupported
+    extension or unreadable content), or `413` if it exceeds the upload size
+    limit.
     """
-    data = await file.read()
+    data = await _read_capped(file, settings.upload_max_mb * 1024 * 1024)
     upload = UploadedFile(filename=file.filename or "upload", data=data)
     try:
         book = import_service.import_book(upload, allowed_extensions=ALLOWED_UPLOAD_EXTENSIONS)
@@ -502,10 +541,10 @@ def search_books(
     q: str = "",
     page: PageParam = 1,
     page_size: PageSizeParam = 50,
-    include_tags: Annotated[list[str] | None, Query()] = None,
-    exclude_tags: Annotated[list[str] | None, Query()] = None,
-    languages: Annotated[list[str] | None, Query()] = None,
-    formats: Annotated[list[str] | None, Query()] = None,
+    include_tags: Annotated[list[str] | None, Query(max_length=_MAX_FILTER_VALUES)] = None,
+    exclude_tags: Annotated[list[str] | None, Query(max_length=_MAX_FILTER_VALUES)] = None,
+    languages: Annotated[list[str] | None, Query(max_length=_MAX_FILTER_VALUES)] = None,
+    formats: Annotated[list[str] | None, Query(max_length=_MAX_FILTER_VALUES)] = None,
     rating_min: Annotated[int | None, Query(ge=0, le=10)] = None,
     rating_max: Annotated[int | None, Query(ge=0, le=10)] = None,
 ) -> BookPage:

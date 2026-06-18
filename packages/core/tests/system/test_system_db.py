@@ -107,3 +107,50 @@ class TestMigrations:
         system_tables = set(SystemBase.metadata.tables)
         assert "books" not in system_tables
         assert "config" in system_tables
+
+
+class TestMigrateAdoptsLegacyDatabase:
+    """A pre-Alembic database (schema created by the old ``create_all``, with no
+    Alembic stamp) must be adopted in place, not re-created. Migrating it must
+    not fail with "table already exists" and must not drop its data.
+    """
+
+    def _make_legacy_db(self, path: Path) -> None:
+        """Create a system DB the old way: tables exist, but no alembic stamp."""
+        from sqlalchemy import create_engine
+
+        engine = create_engine(f"sqlite:///{path}")
+        SystemBase.metadata.create_all(engine)
+        # Put a row in so we can prove migration preserves it.
+        db = SystemDatabase(conn_string=f"sqlite:///{path}")
+        db.set_config("preexisting", "kept")
+        db.close()
+        engine.dispose()
+
+    def test_migrate_adopts_legacy_db_without_error(self, tmp_path: Path) -> None:
+        path = tmp_path / "legacy.db"
+        self._make_legacy_db(path)
+
+        db = SystemDatabase(conn_string=f"sqlite:///{path}")
+        db.migrate()  # must not raise "table config already exists"
+        # Data survives and the schema is now stamped at head.
+        assert db.get_config("preexisting") == "kept"
+        db.migrate()  # still idempotent afterwards
+        db.close()
+
+    def test_migrate_adopts_db_with_empty_alembic_version(self, tmp_path: Path) -> None:
+        # The exact broken state seen in the field: alembic_version table exists
+        # but holds no revision, so Alembic thinks nothing was applied.
+        from sqlalchemy import create_engine, text
+
+        path = tmp_path / "empty-stamp.db"
+        self._make_legacy_db(path)
+        engine = create_engine(f"sqlite:///{path}")
+        with engine.begin() as conn:
+            conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        engine.dispose()
+
+        db = SystemDatabase(conn_string=f"sqlite:///{path}")
+        db.migrate()  # must not raise
+        assert db.get_config("preexisting") == "kept"
+        db.close()

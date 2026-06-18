@@ -412,6 +412,7 @@
         "properties": {
           "to_email": {
             "description": "Address to send the SMTP connectivity test email to.",
+            "format": "email",
             "title": "To Email",
             "type": "string"
           }
@@ -507,6 +508,7 @@
           },
           "to_email": {
             "description": "Address that receives the download link when ready.",
+            "format": "email",
             "title": "To Email",
             "type": "string"
           }
@@ -703,6 +705,7 @@
           },
           "to_email": {
             "description": "Destination e-reader address (e.g. your Kindle email).",
+            "format": "email",
             "title": "To Email",
             "type": "string"
           }
@@ -811,7 +814,7 @@
   "info": {
     "summary": "Open-source core for an ebook library, exposed over HTTP.",
     "title": "Silverfish API",
-    "version": "0.11.0"
+    "version": "0.13.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -900,7 +903,7 @@
         ]
       },
       "post": {
-        "description": "Upload a book file and create a new book.\n\nAccepts a multipart `file` whose extension must be one of the allowed\nupload formats; metadata is extracted from the file on import. Returns the\ncreated book with `201`, or `400` if the file is rejected (unsupported\nextension or unreadable content).",
+        "description": "Upload a book file and create a new book.\n\nAccepts a multipart `file` whose extension must be one of the allowed\nupload formats; metadata is extracted from the file on import. Returns the\ncreated book with `201`, `400` if the file is rejected (unsupported\nextension or unreadable content), or `413` if it exceeds the upload size\nlimit.",
         "operationId": "upload_book",
         "requestBody": {
           "content": {
@@ -932,6 +935,16 @@
               }
             },
             "description": "Bad request"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "422": {
             "content": {
@@ -2035,6 +2048,7 @@
                   "items": {
                     "type": "string"
                   },
+                  "maxItems": 100,
                   "type": "array"
                 },
                 {
@@ -2054,6 +2068,7 @@
                   "items": {
                     "type": "string"
                   },
+                  "maxItems": 100,
                   "type": "array"
                 },
                 {
@@ -2073,6 +2088,7 @@
                   "items": {
                     "type": "string"
                   },
+                  "maxItems": 100,
                   "type": "array"
                 },
                 {
@@ -2092,6 +2108,7 @@
                   "items": {
                     "type": "string"
                   },
+                  "maxItems": 100,
                   "type": "array"
                 },
                 {
