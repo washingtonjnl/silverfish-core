@@ -9,7 +9,7 @@ from collections.abc import Callable
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from silverfish_core.domain.models import Book
 
@@ -174,7 +174,7 @@ class RefreshRequest(BaseModel):
 class SendRequest(BaseModel):
     """Request to send a book to an e-reader email address."""
 
-    to_email: str = Field(description="Destination e-reader address (e.g. your Kindle email).")
+    to_email: EmailStr = Field(description="Destination e-reader address (e.g. your Kindle email).")
     format: str | None = Field(
         default=None,
         description=(
@@ -201,7 +201,7 @@ class EmailConfigOut(BaseModel):
 class EmailTestRequest(BaseModel):
     """Request to send a connectivity test email."""
 
-    to_email: str = Field(description="Address to send the SMTP connectivity test email to.")
+    to_email: EmailStr = Field(description="Address to send the SMTP connectivity test email to.")
 
 
 class ExportRequest(BaseModel):
@@ -215,7 +215,7 @@ class ExportRequest(BaseModel):
     export the whole library.
     """
 
-    to_email: str = Field(description="Address that receives the download link when ready.")
+    to_email: EmailStr = Field(description="Address that receives the download link when ready.")
     book_ids: list[str] | None = Field(
         default=None,
         description="Public ids of the books to export; omit to export the whole library.",

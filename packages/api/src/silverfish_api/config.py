@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     gdrive_refresh_token: str = Field(default="")
     gdrive_folder_id: str = Field(default="")
 
+    # Largest accepted upload, in mebibytes. The upload route reads the whole
+    # body into memory, so an unbounded upload could exhaust RAM; a body over
+    # this ceiling is rejected with 413 before it is fully read.
+    upload_max_mb: int = Field(default=50, ge=1)
+
     # Per-node id for the Snowflake generator (standalone mode). Distinct values
     # across nodes prevent id collisions; 0 is fine for a single process.
     machine_id: int = Field(default=0, ge=0)
