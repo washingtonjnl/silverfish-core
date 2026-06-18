@@ -40,3 +40,17 @@ class JobRecord(SystemBase):
     result: Mapped[str | None] = mapped_column(String)
     error: Mapped[str | None] = mapped_column(String)
     key: Mapped[str] = mapped_column(String, default="", index=True)
+
+
+class ExportToken(SystemBase):
+    """A download token for a finished export zip, with its file and expiry.
+
+    Persisted so an emitted link survives a restart/deploy (an in-memory map
+    would be lost, 404-ing every previously-emailed link). ``expires_at`` is an
+    absolute epoch second; cleanup deletes rows past it.
+    """
+
+    __tablename__ = "export_tokens"
+    token: Mapped[str] = mapped_column(String, primary_key=True)
+    path: Mapped[str] = mapped_column(String)
+    expires_at: Mapped[float] = mapped_column(Float, index=True)

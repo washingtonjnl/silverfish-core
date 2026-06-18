@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from silverfish_core.jobs.store import JobState, JobStore
+
 # A job's work function: it receives a progress-reporting callback and returns
 # any result (stored on the job). The callback takes the progress fraction and
 # an optional human-readable message describing the current step.
@@ -57,7 +59,7 @@ _ACTIVE = {JobStatus.QUEUED, JobStatus.RUNNING}
 class JobQueue:
     """Run jobs on a single background worker thread."""
 
-    def __init__(self) -> None:
+    def __init__(self, store: JobStore | None = None) -> None:
         self._jobs: dict[str, Job] = {}
         self._pending: queue_module.Queue[str] = queue_module.Queue()
         # A Condition (with its own lock) guards job state and lets waiters block
@@ -66,10 +68,17 @@ class JobQueue:
         self._lock = self._cond
         self._worker: threading.Thread | None = None
         self._stop = threading.Event()
+        # Optional persistence of job state. When set, each state change is
+        # mirrored to it so history survives a restart; jobs left active by a
+        # previous run are reconciled to an error on start.
+        self._store = store
 
     def start(self) -> None:
         if self._worker is not None:
             return
+        if self._store is not None:
+            # Any job still active from a previous run could not have finished.
+            self._store.reconcile_interrupted()
         self._stop.clear()
         self._worker = threading.Thread(target=self._run, name="job-worker", daemon=True)
         self._worker.start()
@@ -87,6 +96,7 @@ class JobQueue:
         job = Job(id=job_id, type=job_type, key=key, _func=func)
         with self._lock:
             self._jobs[job_id] = job
+        self._persist(job)
         self._pending.put(job_id)
         return job_id
 
@@ -97,7 +107,9 @@ class JobQueue:
     def find_active(self, key: str) -> Job | None:
         """Return a queued-or-running job with this *key*, or ``None``.
 
-        An empty key never matches, so unkeyed jobs are not deduplicated.
+        An empty key never matches, so unkeyed jobs are not deduplicated. The
+        store (when set) is consulted too, so a job persisted by a previous run
+        still deduplicates even before it is back in memory.
         """
         if not key:
             return None
@@ -105,6 +117,10 @@ class JobQueue:
             for job in self._jobs.values():
                 if job.key == key and job.status in _ACTIVE:
                     return job
+        if self._store is not None:
+            state = self._store.find_active(key)
+            if state is not None:
+                return _job_from_state(state)
         return None
 
     def _run(self) -> None:
@@ -159,6 +175,13 @@ class JobQueue:
             job.revision += 1
             # Wake any stream waiting on this job's progress.
             self._cond.notify_all()
+            snapshot = job
+        # Persist outside the condition lock so a slow store never blocks waiters.
+        self._persist(snapshot)
+
+    def _persist(self, job: Job) -> None:
+        if self._store is not None:
+            self._store.save(_state_from_job(job))
 
     def wait_for_change(self, job_id: str, *, since: int, timeout: float) -> tuple[Job | None, int]:
         """Block until the job's revision exceeds *since*, or *timeout* elapses.
@@ -178,3 +201,33 @@ class JobQueue:
             if job is None:
                 return None, since
             return job, job.revision
+
+
+def _state_from_job(job: Job) -> JobState:
+    """Project a job to its persistable state. The result is stringified (rich
+    results are not part of the persisted contract — only their string form).
+    """
+    return JobState(
+        id=job.id,
+        type=job.type,
+        status=str(job.status),
+        progress=job.progress,
+        message=job.message,
+        result=None if job.result is None else str(job.result),
+        error=job.error,
+        key=job.key,
+    )
+
+
+def _job_from_state(state: JobState) -> Job:
+    """Rebuild a read-only Job view from persisted state (no work function)."""
+    return Job(
+        id=state.id,
+        type=state.type,
+        status=JobStatus(state.status),
+        progress=state.progress,
+        message=state.message,
+        result=state.result,
+        error=state.error,
+        key=state.key,
+    )

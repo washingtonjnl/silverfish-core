@@ -1,10 +1,10 @@
-"""Tests for the ephemeral export store (TDD).
+"""Tests for the persistent export store (TDD).
 
 A finished export zip is registered under an opaque token with a time-to-live.
 The store hands back the file path for a valid token and, once the TTL passes,
 treats the token as gone and deletes the file — a single, uniform expiry rule
-(by time) that works the same whether the file is local or, later, in the cloud.
-The clock is injected so expiry is deterministic in tests.
+(by time). The token→file map is persisted in the system database, so a link
+survives a restart. The clock is injected so expiry is deterministic in tests.
 """
 
 from collections.abc import Iterator
@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from silverfish_api.export_store import ExportStore
+from silverfish_core.system.db import SystemDatabase
 
 
 class _Clock:
@@ -29,8 +30,16 @@ def clock() -> _Clock:
 
 
 @pytest.fixture
-def store(tmp_path: Path, clock: _Clock) -> Iterator[ExportStore]:
-    yield ExportStore(ttl_seconds=3600, clock=clock)
+def database(tmp_path: Path) -> Iterator[SystemDatabase]:
+    db = SystemDatabase(conn_string=f"sqlite:///{tmp_path / 'system.db'}")
+    db.create_schema()
+    yield db
+    db.close()
+
+
+@pytest.fixture
+def store(database: SystemDatabase, clock: _Clock) -> Iterator[ExportStore]:
+    yield ExportStore(database=database, ttl_seconds=3600, clock=clock)
 
 
 def _make_zip(tmp_path: Path, name: str = "export.zip") -> Path:
@@ -52,6 +61,17 @@ class TestRegisterAndResolve:
 
     def test_unknown_token_resolves_to_none(self, store: ExportStore) -> None:
         assert store.resolve("nope") is None
+
+    def test_token_survives_a_restart(
+        self, database: SystemDatabase, clock: _Clock, tmp_path: Path
+    ) -> None:
+        # Register with one store instance, resolve with a fresh one over the
+        # same database — as if the process had restarted. This is the bug fix:
+        # an in-memory map would have lost the token here.
+        zip_path = _make_zip(tmp_path)
+        token = ExportStore(database=database, ttl_seconds=3600, clock=clock).register(zip_path)
+        fresh = ExportStore(database=database, ttl_seconds=3600, clock=clock)
+        assert fresh.resolve(token) == zip_path
 
 
 class TestExpiry:

@@ -34,6 +34,7 @@ from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
+from silverfish_core.system.job_store import SqlJobStore
 
 logger = logging.getLogger("silverfish")
 
@@ -102,7 +103,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         edit_service=edit_service,
     )
 
-    job_queue = JobQueue()
+    # Persist job state to the system database so history survives a restart and
+    # jobs left active by a crash are reconciled on start.
+    job_queue = JobQueue(store=SqlJobStore(system_db))
     job_queue.start()
     convert_service = (
         ConvertBookService(
@@ -128,7 +131,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Calibre export: available only when calibredb is present. The store holds
     # finished zips behind time-limited tokens; the service runs the export.
-    export_store = ExportStore(ttl_seconds=settings.export_ttl_minutes * 60, clock=time.time)
+    export_store = ExportStore(
+        database=system_db,
+        ttl_seconds=settings.export_ttl_minutes * 60,
+        clock=time.time,
+    )
     export_service = (
         ExportService(
             exporter=CalibreExporter(

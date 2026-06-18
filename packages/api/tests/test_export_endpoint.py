@@ -62,7 +62,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         state.mailer = _FakeMailer()
         # Swap in a service backed by a fake exporter so the test never needs a
         # real (possibly locked) calibredb; the store/zip/email path is real.
-        store = ExportStore(ttl_seconds=3600, clock=__import__("time").time)
+        store = ExportStore(
+            database=state.system_db, ttl_seconds=3600, clock=__import__("time").time
+        )
         state.export_store = store
         fake_exporter = _FakeExporter()
         state.fake_exporter = fake_exporter  # exposed so tests can inspect it
