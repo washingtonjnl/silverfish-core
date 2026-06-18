@@ -55,6 +55,15 @@ class ExportService:
         self._work_dir = work_dir
         self._download_base_url = download_base_url.rstrip("/")
 
+    @property
+    def delivers_absolute_links(self) -> bool:
+        """Whether the configured download base URL is absolute.
+
+        An emailed link must be absolute (``https://host/...``) to be clickable.
+        A relative base URL means ``public_base_url`` was not configured.
+        """
+        return self._download_base_url.startswith(("http://", "https://"))
+
     def run_export(self) -> ExportRunResult:
         """Export the library, zip it, register the zip, and return its token.
 

@@ -51,6 +51,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setenv("SILVERFISH_LIBRARY_DIR", str(tmp_path / "lib"))
     monkeypatch.setenv("SILVERFISH_SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("SILVERFISH_SMTP_FROM", "library@example.com")
+    monkeypatch.setenv("SILVERFISH_PUBLIC_BASE_URL", "http://localhost:8000")
     app = create_app()
     with TestClient(app) as test_client:
         state = test_client.app.state  # type: ignore[attr-defined]
@@ -63,7 +64,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
             exporter=_FakeExporter(),  # type: ignore[arg-type]
             store=store,
             work_dir=tmp_path / "work",
-            download_base_url="/export/download",
+            download_base_url="http://localhost:8000/export/download",
         )
         yield test_client
 
@@ -95,6 +96,16 @@ class TestStartExport:
             response = bare.post("/export/calibre", json={"to_email": "me@example.com"})
         assert response.status_code == 503
 
+    def test_requires_public_base_url(self, client: TestClient) -> None:
+        # SMTP and calibredb are fine, but the link would be relative without a
+        # public base URL: refuse with a clear 503 instead of mailing a dud link.
+        service = client.app.state.export_service  # type: ignore[attr-defined]
+        # Re-point the service at a relative base URL to simulate the missing var.
+        object.__setattr__(service, "_download_base_url", "/export/download")
+        response = client.post("/export/calibre", json={"to_email": "me@example.com"})
+        assert response.status_code == 503
+        assert "SILVERFISH_PUBLIC_BASE_URL" in response.json()["error"]["message"]
+
 
 class TestDownload:
     def test_unknown_token_is_404(self, client: TestClient) -> None:
@@ -107,10 +118,11 @@ class TestDownload:
         done = _wait_done(client, job_id)
         assert done["status"] == "done", done
 
-        # The link was emailed (never the zip itself).
+        # The link was emailed (never the zip itself) and is an absolute URL.
         mailer = client.app.state.mailer  # type: ignore[attr-defined]
         assert len(mailer.sent) == 1
         body = mailer.sent[0].get_content()
+        assert "http://localhost:8000/export/download/" in body
         token = body.rsplit("/export/download/", 1)[1].split()[0].strip()
 
         # The emailed link downloads the zip.

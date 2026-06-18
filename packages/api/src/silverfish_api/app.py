@@ -139,7 +139,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             ),
             store=export_store,
             work_dir=settings.resolved_export_dir,
-            download_base_url="/export/download",
+            download_base_url=settings.export_download_base_url,
         )
         if binaries.calibredb is not None
         else None

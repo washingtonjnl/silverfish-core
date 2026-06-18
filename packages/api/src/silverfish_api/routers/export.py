@@ -41,6 +41,14 @@ def start_export(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Export is unavailable: SMTP is not configured to deliver the link.",
         )
+    if not export_service.delivers_absolute_links:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Export is unavailable: set SILVERFISH_PUBLIC_BASE_URL so the "
+                "emailed download link is an absolute, clickable URL."
+            ),
+        )
 
     service = export_service
     active_mailer = mailer

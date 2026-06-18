@@ -26,6 +26,7 @@ _ENV_KEYS = (
     "SILVERFISH_STORAGE",
     "SILVERFISH_CALIBRE_BIN_DIR",
     "SILVERFISH_MACHINE_ID",
+    "SILVERFISH_PUBLIC_BASE_URL",
 )
 
 
@@ -157,6 +158,25 @@ class TestCalibreBinDir:
     def test_reads_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SILVERFISH_CALIBRE_BIN_DIR", "/opt/calibre")
         assert load_settings(env_dir=tmp_path).calibre_bin_dir == Path("/opt/calibre")
+
+
+class TestPublicBaseUrl:
+    def test_defaults_to_empty(self, tmp_path: Path) -> None:
+        assert load_settings(env_dir=tmp_path).public_base_url == ""
+
+    def test_download_base_url_is_absolute_when_set(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SILVERFISH_PUBLIC_BASE_URL", "https://library.example.com")
+        settings = load_settings(env_dir=tmp_path)
+        assert settings.export_download_base_url == "https://library.example.com/export/download"
+
+    def test_trailing_slash_is_trimmed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SILVERFISH_PUBLIC_BASE_URL", "http://localhost:8000/")
+        settings = load_settings(env_dir=tmp_path)
+        assert settings.export_download_base_url == "http://localhost:8000/export/download"
 
 
 class TestType:
