@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
 from silverfish_api import __version__
@@ -185,6 +186,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         system_db.close()
 
 
+def _operation_id(route: APIRoute) -> str:
+    """Use the route's function name as the operation id.
+
+    FastAPI's default ids embed the path and verb (``get_book_books__book_id__get``),
+    which become ugly SDK method names. The function name alone (``get_book``) is
+    clean, snake_case (neutral across languages — SDK generators re-case it to
+    their convention), and unique across the app.
+    """
+    return route.name
+
+
 def create_app() -> FastAPI:
     """Build and return the FastAPI application.
 
@@ -196,6 +208,7 @@ def create_app() -> FastAPI:
         version=__version__,
         summary="Open-source core for an ebook library, exposed over HTTP.",
         lifespan=_lifespan,
+        generate_unique_id_function=_operation_id,
     )
 
     register_error_handlers(app)
@@ -207,6 +220,13 @@ def create_app() -> FastAPI:
         responses=ERROR_500,
     )
     def health(request: Request) -> HealthResponse:
+        """Report liveness and the availability of optional dependencies.
+
+        Always returns `status` ``"ok"`` and the API `version`, plus the
+        Calibre binary availability (`convert_available`, `metadata_available`)
+        and whether send-to-ereader is usable (`send_available`, true when SMTP
+        is configured).
+        """
         binaries: CalibreBinaries = request.app.state.binaries
         report = binaries.health()
         return HealthResponse(
