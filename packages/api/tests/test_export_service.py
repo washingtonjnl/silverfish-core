@@ -66,7 +66,7 @@ class _PresignedStorage(_LocalStorage):
     def write_book_file(self, path: str, data: bytes) -> None:
         self.uploaded[path] = data
 
-    def presigned_url(self, path: str, *, expires_in: int) -> str:
+    def download_link(self, path: str, *, expires_in: int) -> str:
         return f"https://s3.example.com/{path}?expires={expires_in}&sig=abc"
 
 

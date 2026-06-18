@@ -22,6 +22,10 @@ dev = [
     "boto3>=1.35",
     "boto3-stubs[s3]>=1.35",
     "moto[s3]>=5.0",
+    # Google Drive adapter (the concrete client). Tests use an in-memory fake,
+    # so the lib is only needed to type-check/build the real client.
+    "google-api-python-client>=2.140",
+    "google-auth>=2.34",
 ]
 
 [tool.uv.workspace]
@@ -89,6 +93,13 @@ disallow_untyped_defs = true
 no_implicit_reexport = true
 mypy_path = ["packages/core/src", "packages/api/src"]
 files = ["packages/core/src", "packages/api/src", "packages/core/tests", "packages/api/tests"]
+
+# Google API client libraries ship no type stubs / py.typed. Don't let their
+# untyped surface (used only in the gdrive adapter and factory) decay our code
+# to Any-errors; we keep our own signatures typed against the DriveClient port.
+[[tool.mypy.overrides]]
+module = ["googleapiclient.*", "google.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true
 
 # ----------------------------------------------------------------------------
 # pytest

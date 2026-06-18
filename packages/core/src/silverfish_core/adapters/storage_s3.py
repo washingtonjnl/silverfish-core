@@ -96,12 +96,12 @@ class S3Storage:
         for found in self._list(key):
             self._client.delete_object(Bucket=self._bucket, Key=found)
 
-    def presigned_url(self, path: str, *, expires_in: int) -> str:
+    def download_link(self, path: str, *, expires_in: int) -> str:
         """Return a time-limited URL that downloads the object directly from S3.
 
-        Lets a large export be downloaded straight from S3 (resumable, off the
-        API server) for *expires_in* seconds. The path is traversal-checked like
-        any other.
+        A presigned URL: lets a large export be downloaded straight from S3
+        (resumable, off the API server) for *expires_in* seconds. The path is
+        traversal-checked like any other.
         """
         key = self._key(path)
         url: str = self._client.generate_presigned_url(

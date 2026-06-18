@@ -34,15 +34,15 @@ class FileStorage(Protocol):
 
 
 @runtime_checkable
-class PresignedDownload(Protocol):
+class DownloadLinkProvider(Protocol):
     """Optional capability: hand out a direct, time-limited download URL.
 
-    Backends that can serve an object directly (e.g. S3 presigned URLs) implement
-    this so large downloads bypass the API server. Local disk does not; callers
-    check ``isinstance(storage, PresignedDownload)`` and fall back to serving the
-    file themselves.
+    Backends that can serve a file directly — an S3 presigned URL, a Google Drive
+    share link — implement this so large downloads bypass the API server. Local
+    disk does not; callers check ``isinstance(storage, DownloadLinkProvider)`` and
+    fall back to serving the file themselves.
     """
 
-    def presigned_url(self, path: str, *, expires_in: int) -> str:
-        """Return a URL that downloads the object at *path* for *expires_in* s."""
+    def download_link(self, path: str, *, expires_in: int) -> str:
+        """Return a URL that downloads the file at *path* for *expires_in* s."""
         ...

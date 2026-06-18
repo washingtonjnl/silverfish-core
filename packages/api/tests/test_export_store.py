@@ -120,3 +120,54 @@ class TestCleanup:
         assert store.resolve(stale_token) is None
         assert fresh2.exists()
         assert store.resolve(fresh2_token) == fresh2
+
+
+class _RecordingStorage:
+    """A FileStorage that records deletes (the only method the store calls)."""
+
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def read_book_file(self, path: str) -> bytes:
+        raise NotImplementedError
+
+    def write_book_file(self, path: str, data: bytes) -> None: ...
+    def write_cover(self, book_dir: str, data: bytes) -> None: ...
+    def move(self, old_path: str, new_path: str) -> None: ...
+
+    def delete(self, path: str) -> None:
+        self.deleted.append(path)
+
+
+class TestRemoteCleanup:
+    """Expiry must delete the remote object, not just stop serving the link."""
+
+    def test_expired_remote_object_is_deleted_from_storage(
+        self, database: SystemDatabase, clock: _Clock
+    ) -> None:
+        storage = _RecordingStorage()
+        store = ExportStore(database=database, ttl_seconds=3600, clock=clock, storage=storage)
+        store.register_remote("exports/abc.zip")
+        clock.now += 3601
+        store.purge_expired()
+        assert storage.deleted == ["exports/abc.zip"]
+
+    def test_expired_remote_token_deletes_on_resolve(
+        self, database: SystemDatabase, clock: _Clock
+    ) -> None:
+        storage = _RecordingStorage()
+        store = ExportStore(database=database, ttl_seconds=3600, clock=clock, storage=storage)
+        token = store.register_remote("exports/xyz.zip")
+        clock.now += 3601
+        # Remote tokens never resolve to a path, but resolving an expired one
+        # still triggers cleanup of the remote object.
+        assert store.resolve(token) is None
+        assert storage.deleted == ["exports/xyz.zip"]
+
+    def test_valid_remote_object_is_kept(self, database: SystemDatabase, clock: _Clock) -> None:
+        storage = _RecordingStorage()
+        store = ExportStore(database=database, ttl_seconds=3600, clock=clock, storage=storage)
+        store.register_remote("exports/keep.zip")
+        clock.now += 1800  # within TTL
+        store.purge_expired()
+        assert storage.deleted == []

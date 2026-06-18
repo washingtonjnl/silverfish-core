@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Protocol
 
 from silverfish_api.export_store import ExportStore
-from silverfish_core.ports import FileStorage, PresignedDownload
+from silverfish_core.ports import DownloadLinkProvider, FileStorage
 
 
 class _Exporter(Protocol):
@@ -70,7 +70,7 @@ class ExportService:
         Requires a configured public base URL for the local download route; the
         presigned case always yields an absolute URL from the storage backend.
         """
-        if isinstance(self._storage, PresignedDownload):
+        if isinstance(self._storage, DownloadLinkProvider):
             return True
         return self._public_base_url.startswith(("http://", "https://"))
 
@@ -116,16 +116,19 @@ class ExportService:
     def _deliver(self, zip_path: Path) -> str:
         """Place the zip where it can be downloaded and return its URL.
 
-        Uploads to storage and returns a presigned URL when the backend supports
-        it; otherwise registers the local file under a token and points at the
-        API download route. The local zip is removed after a presigned upload.
+        With a link-capable backend, the zip is uploaded to storage and the URL
+        is a direct link the backend serves; the remote object is registered for
+        cleanup so expiry deletes the file, not just the link. The local zip is
+        removed after upload. Otherwise the local file is registered under a
+        token and served by the API download route.
         """
-        if isinstance(self._storage, PresignedDownload):
-            token = _unique_name("export")
-            key = f"exports/{token}.zip"
+        if isinstance(self._storage, DownloadLinkProvider):
+            key = f"exports/{_unique_name('export')}.zip"
             self._storage.write_book_file(key, zip_path.read_bytes())
             zip_path.unlink(missing_ok=True)
-            return self._storage.presigned_url(key, expires_in=int(self._store.ttl_seconds))
+            # Track the remote object so purge_expired deletes it at TTL.
+            self._store.register_remote(key)
+            return self._storage.download_link(key, expires_in=int(self._store.ttl_seconds))
         token = self._store.register(zip_path)
         return f"{self._public_base_url}/export/download/{token}"
 

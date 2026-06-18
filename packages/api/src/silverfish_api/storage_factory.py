@@ -7,6 +7,8 @@ global default. Adding a backend means wiring it here only — the core never
 changes.
 """
 
+from typing import assert_never
+
 from silverfish_api.config import Settings, StorageType
 from silverfish_core.adapters.storage_local import LocalFileStorage
 from silverfish_core.ports import FileStorage
@@ -15,18 +17,17 @@ from silverfish_core.ports import FileStorage
 def build_storage(settings: Settings) -> FileStorage:
     """Build the configured ``FileStorage`` from *settings*.
 
-    Raises ``NotImplementedError`` for backends that are declared but not yet
-    wired, so a misconfiguration fails loudly instead of silently degrading.
+    Every ``StorageType`` is handled; ``assert_never`` makes adding a new backend
+    a type error here until it is wired, so a gap fails at check time, not run
+    time.
     """
     if settings.storage is StorageType.LOCAL:
         return LocalFileStorage(root=settings.resolved_storage_dir)
     if settings.storage is StorageType.S3:
         return _build_s3(settings)
-    msg = (
-        f"Storage backend '{settings.storage.value}' is not implemented yet. "
-        "Available: 'local', 's3'; gdrive is planned."
-    )
-    raise NotImplementedError(msg)
+    if settings.storage is StorageType.GDRIVE:
+        return _build_gdrive(settings)
+    assert_never(settings.storage)
 
 
 def _build_s3(settings: Settings) -> FileStorage:
@@ -58,3 +59,43 @@ def _build_s3(settings: Settings) -> FileStorage:
         aws_secret_access_key=settings.s3_secret_access_key if has_keys else None,
     )
     return S3Storage(bucket=settings.s3_bucket, client=client, prefix=settings.s3_prefix)
+
+
+def _build_gdrive(settings: Settings) -> FileStorage:
+    """Build a Google Drive storage adapter from OAuth config.
+
+    Credentials (client id/secret + refresh token) and the target folder are
+    config; the consent flow that produces the refresh token is out of band.
+    ``google-api-python-client``/``google-auth`` are the optional 'gdrive' extra.
+    """
+    if not settings.gdrive_folder_id:
+        msg = "Google Drive storage requires SILVERFISH_GDRIVE_FOLDER_ID to be set."
+        raise ValueError(msg)
+    if not (settings.gdrive_client_id and settings.gdrive_client_secret):
+        msg = "Google Drive storage requires GDRIVE_CLIENT_ID and GDRIVE_CLIENT_SECRET."
+        raise ValueError(msg)
+    if not settings.gdrive_refresh_token:
+        msg = "Google Drive storage requires SILVERFISH_GDRIVE_REFRESH_TOKEN to be set."
+        raise ValueError(msg)
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+    except ImportError as exc:  # pragma: no cover - only without the extra
+        msg = "Google Drive storage needs the 'gdrive' extra: pip install silverfish-core[gdrive]"
+        raise RuntimeError(msg) from exc
+
+    from silverfish_core.adapters.gdrive_client import GoogleDriveClient
+    from silverfish_core.adapters.storage_gdrive import GDriveStorage
+
+    # google-auth ships no stubs, so Credentials is an untyped call.
+    credentials = Credentials(  # type: ignore[no-untyped-call]
+        token=None,
+        refresh_token=settings.gdrive_refresh_token,
+        client_id=settings.gdrive_client_id,
+        client_secret=settings.gdrive_client_secret,
+        token_uri="https://oauth2.googleapis.com/token",  # noqa: S106 - public OAuth endpoint, not a secret
+    )
+    service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+    return GDriveStorage(
+        client=GoogleDriveClient(service), root_folder_id=settings.gdrive_folder_id
+    )

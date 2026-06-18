@@ -104,6 +104,16 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = Field(default="")
     s3_prefix: str = Field(default="")
 
+    # Google Drive storage, used when storage == "gdrive". The OAuth client +
+    # refresh token are obtained out of band (the consent flow is the product's
+    # job; for single-tenant use a one-off script) and are secrets (.env.local).
+    # folder_id is the Drive folder the library lives under. Requires the
+    # optional 'gdrive' extra.
+    gdrive_client_id: str = Field(default="")
+    gdrive_client_secret: str = Field(default="")
+    gdrive_refresh_token: str = Field(default="")
+    gdrive_folder_id: str = Field(default="")
+
     # Per-node id for the Snowflake generator (standalone mode). Distinct values
     # across nodes prevent id collisions; 0 is fine for a single process.
     machine_id: int = Field(default=0, ge=0)
@@ -136,6 +146,9 @@ class Settings(BaseSettings):
     # under the library dir). Export needs SMTP configured to deliver the link.
     export_ttl_minutes: int = Field(default=1440, ge=1)
     export_dir: str = Field(default="")
+    # How often the background sweep deletes expired export files (local and
+    # remote). Default 60 min — the exact moment a zip is removed is not critical.
+    export_purge_interval_minutes: int = Field(default=60, ge=1)
 
     @property
     def resolved_library_db(self) -> str:
