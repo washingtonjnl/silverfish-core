@@ -178,6 +178,17 @@ class EmailTestRequest(BaseModel):
     to_email: str
 
 
+class ExportRequest(BaseModel):
+    """Request to export the library to a Calibre-format zip.
+
+    The export runs asynchronously; a time-limited download link is emailed to
+    ``to_email`` when it is ready (the zip is never attached — a library can be
+    far larger than any mail server accepts).
+    """
+
+    to_email: str
+
+
 class JobOut(BaseModel):
     """A background job's observable state."""
 

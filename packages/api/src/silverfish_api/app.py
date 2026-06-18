@@ -6,6 +6,7 @@ on startup and includes the routers. Domain behaviour lives in
 """
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,11 +17,14 @@ from silverfish_api import __version__
 from silverfish_api.config import load_settings
 from silverfish_api.db_factory import build_library_repository, build_system_db
 from silverfish_api.errors import ERROR_500, register_error_handlers
+from silverfish_api.export_service import ExportService
+from silverfish_api.export_store import ExportStore
 from silverfish_api.mailer_factory import build_mailer
-from silverfish_api.routers import books, config, jobs
+from silverfish_api.routers import books, config, export, jobs
 from silverfish_api.storage_factory import build_storage
-from silverfish_core.adapters.calibre_binaries import CalibreBinaries
+from silverfish_core.adapters.calibre_binaries import CalibreBinaries, SubprocessRunner
 from silverfish_core.adapters.convert_calibre import CalibreConverter
+from silverfish_core.adapters.export_calibre import CalibreExporter
 from silverfish_core.adapters.extract_composite import CompositeMetadataExtractor
 from silverfish_core.adapters.extract_ebook_meta import EbookMetaExtractor
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
@@ -122,6 +126,25 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         else None
     )
 
+    # Calibre export: available only when calibredb is present. The store holds
+    # finished zips behind time-limited tokens; the service runs the export.
+    export_store = ExportStore(ttl_seconds=settings.export_ttl_hours * 3600, clock=time.time)
+    export_service = (
+        ExportService(
+            exporter=CalibreExporter(
+                repository=repository,
+                storage=storage,
+                calibredb=binaries.calibredb,
+                runner=SubprocessRunner(),
+            ),
+            store=export_store,
+            work_dir=settings.resolved_export_dir,
+            download_base_url="/export/download",
+        )
+        if binaries.calibredb is not None
+        else None
+    )
+
     app.state.settings = settings
     app.state.repository = repository
     app.state.system_db = system_db
@@ -134,6 +157,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.convert_service = convert_service
     app.state.mailer = mailer
     app.state.send_service = send_service
+    app.state.export_store = export_store
+    app.state.export_service = export_service
     try:
         yield
     finally:
@@ -179,5 +204,6 @@ def create_app() -> FastAPI:
     app.include_router(books.router)
     app.include_router(jobs.router)
     app.include_router(config.router)
+    app.include_router(export.router)
 
     return app

@@ -10,6 +10,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Path, Request
 
 from silverfish_api.config import Settings
+from silverfish_api.export_service import ExportService
+from silverfish_api.export_store import ExportStore
 from silverfish_api.public_id import PublicIdCodec
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.ports import FileStorage, Mailer, MetadataRepository
@@ -138,6 +140,24 @@ def get_system_db(request: Request) -> SystemDatabase:
     return system_db
 
 
+def get_export_service(request: Request) -> "ExportService | None":
+    """Return the export service, or ``None`` when calibredb is absent."""
+    service = request.app.state.export_service
+    if service is not None and not isinstance(service, ExportService):
+        msg = "Export service is misconfigured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
+def get_export_store(request: Request) -> "ExportStore":
+    """Return the process-wide export store from the app state."""
+    store = request.app.state.export_store
+    if not isinstance(store, ExportStore):
+        msg = "Export store is not configured on the application state"
+        raise RuntimeError(msg)
+    return store
+
+
 RepositoryDep = Annotated[MetadataRepository, Depends(get_repository)]
 ImportServiceDep = Annotated[ImportBookService, Depends(get_import_service)]
 StorageDep = Annotated[FileStorage, Depends(get_storage)]
@@ -148,6 +168,8 @@ RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_servic
 SendServiceDep = Annotated[SendToEreaderService | None, Depends(get_send_service)]
 MailerDep = Annotated[Mailer | None, Depends(get_mailer)]
 SystemDbDep = Annotated[SystemDatabase, Depends(get_system_db)]
+ExportServiceDep = Annotated[ExportService | None, Depends(get_export_service)]
+StoreDep = Annotated[ExportStore, Depends(get_export_store)]
 
 # Decoded internal book id from a public path segment. Routers depend on this
 # instead of declaring ``book_id: int`` so the public id stays opaque.
