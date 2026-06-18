@@ -10,25 +10,51 @@ and 404s for an unknown or expired token.
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 
-from silverfish_api.deps import ExportServiceDep, JobQueueDep, MailerDep, StoreDep
-from silverfish_api.errors import ERROR_404, ERROR_422, ERROR_500, ERROR_503
+from silverfish_api.deps import (
+    ExportServiceDep,
+    JobQueueDep,
+    MailerDep,
+    PublicIdCodecDep,
+    StoreDep,
+)
+from silverfish_api.errors import ERROR_400, ERROR_404, ERROR_422, ERROR_500, ERROR_503
+from silverfish_api.public_id import PublicIdCodec
 from silverfish_api.schemas import ExportRequest, JobOut
 from silverfish_core.jobs.queue import ProgressCallback
 
 router = APIRouter(tags=["export"])
 
 
+def _decode_book_ids(public_ids: list[str] | None, codec: PublicIdCodec) -> list[int] | None:
+    """Decode public book ids to internal ids. ``None``/empty stays ``None``
+    (export everything). A malformed id is a 400.
+    """
+    if not public_ids:
+        return None
+    decoded: list[int] = []
+    for public_id in public_ids:
+        try:
+            decoded.append(codec.decode(public_id))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid book id: {public_id!r}",
+            ) from exc
+    return decoded
+
+
 @router.post(
     "/export/calibre",
     response_model=JobOut,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={**ERROR_422, **ERROR_503, **ERROR_500},
+    responses={**ERROR_400, **ERROR_422, **ERROR_503, **ERROR_500},
 )
 def start_export(
     request: ExportRequest,
     export_service: ExportServiceDep,
     mailer: MailerDep,
     job_queue: JobQueueDep,
+    codec: PublicIdCodecDep,
 ) -> JobOut:
     """Start an async Calibre export; the download link is emailed when ready."""
     if export_service is None:
@@ -50,13 +76,17 @@ def start_export(
             ),
         )
 
+    # Decode the public book ids (base62 strings) to internal ids. Omitted =>
+    # whole library. A malformed id is a bad request.
+    book_ids = _decode_book_ids(request.book_ids, codec)
+
     service = export_service
     active_mailer = mailer
     to_email = request.to_email
 
     def work(report: ProgressCallback) -> None:
         report(0.1, "Building Calibre library")
-        result = service.run_export()
+        result = service.run_export(book_ids)
         report(0.9, "Sending download link")
         active_mailer.send(service.build_ready_email(to_email=to_email, token=result.token))
         report(1.0, "Done")

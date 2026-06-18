@@ -34,7 +34,11 @@ class _FakeExporter:
     """Writes a tiny Calibre-looking tree, so the service can zip it without
     needing a real calibredb (the binary is unavailable/locked in CI)."""
 
-    def export(self, destination: Path) -> object:
+    def __init__(self) -> None:
+        self.book_ids: object = "unset"
+
+    def export(self, destination: Path, book_ids: object = None) -> object:
+        self.book_ids = book_ids
         destination.mkdir(parents=True, exist_ok=True)
         (destination / "metadata.db").write_bytes(b"calibre db")
 
@@ -58,10 +62,14 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         state.mailer = _FakeMailer()
         # Swap in a service backed by a fake exporter so the test never needs a
         # real (possibly locked) calibredb; the store/zip/email path is real.
-        store = ExportStore(ttl_seconds=3600, clock=__import__("time").time)
+        store = ExportStore(
+            database=state.system_db, ttl_seconds=3600, clock=__import__("time").time
+        )
         state.export_store = store
+        fake_exporter = _FakeExporter()
+        state.fake_exporter = fake_exporter  # exposed so tests can inspect it
         state.export_service = ExportService(
-            exporter=_FakeExporter(),  # type: ignore[arg-type]
+            exporter=fake_exporter,  # type: ignore[arg-type]
             store=store,
             work_dir=tmp_path / "work",
             download_base_url="http://localhost:8000/export/download",
@@ -105,6 +113,28 @@ class TestStartExport:
         response = client.post("/export/calibre", json={"to_email": "me@example.com"})
         assert response.status_code == 503
         assert "SILVERFISH_PUBLIC_BASE_URL" in response.json()["error"]["message"]
+
+    def test_omitting_book_ids_exports_everything(self, client: TestClient) -> None:
+        start = client.post("/export/calibre", json={"to_email": "me@example.com"})
+        _wait_done(client, start.json()["id"])
+        # No ids passed through to the exporter -> whole library.
+        assert client.app.state.fake_exporter.book_ids is None  # type: ignore[attr-defined]
+
+    def test_book_ids_are_decoded_and_passed(self, client: TestClient) -> None:
+        # Public ids "1" and "2" decode to internal ids 1 and 2 (calibre mode is
+        # off here, but small base62 numbers decode to themselves).
+        start = client.post(
+            "/export/calibre", json={"to_email": "me@example.com", "book_ids": ["1", "2"]}
+        )
+        _wait_done(client, start.json()["id"])
+        assert client.app.state.fake_exporter.book_ids == [1, 2]  # type: ignore[attr-defined]
+
+    def test_invalid_book_id_is_400(self, client: TestClient) -> None:
+        response = client.post(
+            "/export/calibre",
+            json={"to_email": "me@example.com", "book_ids": ["not-valid!"]},
+        )
+        assert response.status_code == 400
 
 
 class TestDownload:

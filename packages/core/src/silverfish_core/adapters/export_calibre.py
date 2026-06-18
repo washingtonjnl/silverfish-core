@@ -12,6 +12,7 @@ This is a one-shot snapshot, not a live sync: ids are reassigned by the
 destination, and a later change in the source does not propagate.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from silverfish_core.adapters.calibre_binaries import ProcessRunner
@@ -44,8 +45,13 @@ class CalibreExporter:
         self._calibredb = calibredb
         self._runner = runner
 
-    def export(self, destination: Path) -> "ExportResult":
+    def export(self, destination: Path, book_ids: Sequence[int] | None = None) -> "ExportResult":
         """Write a Calibre library at *destination* and return a summary.
+
+        *book_ids* selects which books to export: ``None`` exports the whole
+        library; a sequence exports exactly those books (the multi-tenant /
+        collection case — the caller, e.g. a SaaS, scopes what a tenant may
+        export). Unknown ids are skipped.
 
         *destination* must be empty (or not yet exist). Raises ``ExportError`` if
         it already holds files, or if creating the Calibre library fails.
@@ -62,7 +68,7 @@ class CalibreExporter:
         dest_repo = SqliteCalibreRepository(db_path=dest_db)
         dest_storage = LocalFileStorage(root=destination)
         try:
-            count = self._copy_all_books(dest_repo, dest_storage)
+            count = self._copy_all_books(dest_repo, dest_storage, book_ids)
         finally:
             dest_repo.close()
         return ExportResult(book_count=count, destination=destination)
@@ -89,16 +95,28 @@ class CalibreExporter:
             msg = f"calibredb could not create the Calibre library: {detail}"
             raise ExportError(msg)
 
-    def _copy_all_books(self, dest_repo: SqliteCalibreRepository, dest_storage: FileStorage) -> int:
+    def _copy_all_books(
+        self,
+        dest_repo: SqliteCalibreRepository,
+        dest_storage: FileStorage,
+        book_ids: Sequence[int] | None,
+    ) -> int:
         count = 0
-        for book in self._iter_source_books():
+        for book in self._iter_source_books(book_ids):
             created = dest_repo.create_book(book)
             self._copy_book_files(book, created, dest_repo, dest_storage)
             count += 1
         return count
 
-    def _iter_source_books(self) -> list[Book]:
-        """Read every source book, page by page."""
+    def _iter_source_books(self, book_ids: Sequence[int] | None) -> list[Book]:
+        """Read the books to export.
+
+        ``None`` reads the whole library page by page; a sequence reads exactly
+        those ids (unknown ids are skipped).
+        """
+        if book_ids is not None:
+            return [book for bid in book_ids if (book := self._source_repo.get_book(bid))]
+
         books: list[Book] = []
         page = 1
         while True:

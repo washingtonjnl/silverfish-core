@@ -121,9 +121,10 @@ class Settings(BaseSettings):
 
     # Calibre export (snapshot a library to a downloadable zip). The zip is
     # ephemeral: a download link is emailed and the file is deleted once this TTL
-    # passes. export_dir holds in-progress/finished zips (defaults under the
-    # library dir). Export needs SMTP configured to deliver the link.
-    export_ttl_hours: int = Field(default=24, ge=1)
+    # passes. Kept short by default — the link should be used promptly.
+    # export_dir holds in-progress/finished zips (defaults under the library
+    # dir). Export needs SMTP configured to deliver the link.
+    export_ttl_minutes: int = Field(default=10, ge=1)
     export_dir: str = Field(default="")
 
     @property

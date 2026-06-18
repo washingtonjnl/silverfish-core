@@ -13,6 +13,7 @@ the zip itself is time-limited.
 
 import shutil
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
@@ -24,7 +25,9 @@ from silverfish_api.export_store import ExportStore
 class _Exporter(Protocol):
     """The slice of CalibreExporter this service uses."""
 
-    def export(self, destination: Path) -> "_ExportSummary": ...
+    def export(
+        self, destination: Path, book_ids: "Sequence[int] | None" = None
+    ) -> "_ExportSummary": ...
 
 
 class _ExportSummary(Protocol):
@@ -64,9 +67,10 @@ class ExportService:
         """
         return self._download_base_url.startswith(("http://", "https://"))
 
-    def run_export(self) -> ExportRunResult:
+    def run_export(self, book_ids: "Sequence[int] | None" = None) -> ExportRunResult:
         """Export the library, zip it, register the zip, and return its token.
 
+        *book_ids* selects which books to export (``None`` = the whole library).
         The intermediate (unzipped) directory is always removed; only the zip
         remains, held by the store until its TTL expires.
         """
@@ -75,7 +79,7 @@ class ExportService:
         library_dir = run_dir / "library"
         zip_path = run_dir.with_suffix(".zip")
         try:
-            summary = self._exporter.export(library_dir)
+            summary = self._exporter.export(library_dir, book_ids)
             self._zip_directory(library_dir, zip_path)
         finally:
             # The unzipped tree never lingers, even if zipping failed.
@@ -86,13 +90,15 @@ class ExportService:
     def build_ready_email(self, *, to_email: str, token: str) -> EmailMessage:
         """Build the "export ready" email with the time-limited download link."""
         link = f"{self._download_base_url}/{token}"
+        minutes = max(1, round(self._store.ttl_seconds / 60))
+        window = "1 minute" if minutes == 1 else f"{minutes} minutes"
         message = EmailMessage()
         message["Subject"] = "Your Silverfish library export is ready"
         message["To"] = to_email
         message.set_content(
             "Your library export is ready to download.\n\n"
             f"Download it here: {link}\n\n"
-            "The link is temporary and will expire after a while, so download it soon."
+            f"The link is temporary and expires in about {window}, so download it now."
         )
         return message
 

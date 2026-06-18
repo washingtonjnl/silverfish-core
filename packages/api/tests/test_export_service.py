@@ -16,6 +16,7 @@ import pytest
 
 from silverfish_api.export_service import ExportService
 from silverfish_api.export_store import ExportStore
+from silverfish_core.system.db import SystemDatabase
 
 
 class _FakeExporter:
@@ -23,9 +24,11 @@ class _FakeExporter:
 
     def __init__(self) -> None:
         self.exported_to: Path | None = None
+        self.book_ids: object = "unset"
 
-    def export(self, destination: Path) -> object:
+    def export(self, destination: Path, book_ids: object = None) -> object:
         self.exported_to = destination
+        self.book_ids = book_ids
         destination.mkdir(parents=True, exist_ok=True)
         (destination / "metadata.db").write_bytes(b"calibre db")
         book_dir = destination / "Stephen King" / "It (1)"
@@ -43,8 +46,11 @@ def _clock() -> float:
 
 
 @pytest.fixture
-def store() -> ExportStore:
-    return ExportStore(ttl_seconds=3600, clock=_clock)
+def store(tmp_path: Path) -> Iterator[ExportStore]:
+    db = SystemDatabase(conn_string=f"sqlite:///{tmp_path / 'system.db'}")
+    db.create_schema()
+    yield ExportStore(database=db, ttl_seconds=3600, clock=_clock)
+    db.close()
 
 
 @pytest.fixture

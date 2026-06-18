@@ -184,9 +184,13 @@ class ExportRequest(BaseModel):
     The export runs asynchronously; a time-limited download link is emailed to
     ``to_email`` when it is ready (the zip is never attached — a library can be
     far larger than any mail server accepts).
+
+    ``book_ids`` selects which books to export (public id strings). Omit it to
+    export the whole library.
     """
 
     to_email: str
+    book_ids: list[str] | None = None
 
 
 class JobOut(BaseModel):
