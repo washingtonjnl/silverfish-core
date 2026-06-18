@@ -18,6 +18,7 @@ Usage:
 
 import os
 import sys
+from pathlib import Path
 
 # Least-privilege scope: the app can only see/manage files and folders it
 # creates (or that you explicitly open with it) — never your whole Drive.
@@ -25,7 +26,22 @@ import sys
 _SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
+def _load_env_files() -> None:
+    """Load .env then .env.local into the environment via python-dotenv.
+
+    A real env var always wins; .env.local overrides .env. Lets the script reuse
+    the credentials you already put in .env.local instead of repeating them on
+    the command line.
+    """
+    from dotenv import load_dotenv
+
+    root = Path(__file__).resolve().parent.parent
+    load_dotenv(root / ".env")
+    load_dotenv(root / ".env.local", override=True)
+
+
 def main() -> int:
+    _load_env_files()
     client_id = os.environ.get("SILVERFISH_GDRIVE_CLIENT_ID") or input("OAuth client id: ").strip()
     client_secret = (
         os.environ.get("SILVERFISH_GDRIVE_CLIENT_SECRET") or input("OAuth client secret: ").strip()
