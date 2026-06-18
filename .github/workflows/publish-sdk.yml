@@ -1,0 +1,63 @@
+name: Publish SDK
+
+# Publishes @silverfish-app/sdk to the public npm registry using npm Trusted
+# Publishing (OIDC) — no long-lived token is stored. Trust is established on
+# npmjs.com between this repository + workflow and the package.
+#
+# Trigger: a GitHub Release whose tag starts with `sdk-v` (e.g. `sdk-v1.0.0`).
+# The SDK is versioned independently from the repo's own `vX.Y.Z` tags, so its
+# releases use a dedicated tag prefix. The published version is whatever is in
+# packages/sdk-node/package.json — make sure it matches the tag before tagging.
+#
+# Can also be run manually from the Actions tab (workflow_dispatch).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    # Only run for SDK releases, never for the repo's own vX.Y.Z releases.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'sdk-v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for OIDC — lets npm verify the publisher
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Trusted Publishing requires Node >= 22.14.0.
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: packages/sdk-node/pnpm-lock.yaml
+
+      - name: Ensure npm supports Trusted Publishing (>= 11.5.1)
+        run: npm install -g npm@latest
+
+      - name: Install SDK dependencies
+        working-directory: packages/sdk-node
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the client from the OpenAPI contract
+        working-directory: packages/sdk-node
+        run: pnpm run generate
+
+      - name: Build the SDK (ESM + CJS + types)
+        working-directory: packages/sdk-node
+        run: pnpm run build
+
+      - name: Publish to npm (Trusted Publishing / OIDC)
+        working-directory: packages/sdk-node
+        # No NODE_AUTH_TOKEN — npm uses the OIDC id-token from this workflow.
+        # --provenance attaches a verifiable build-provenance attestation.
+        run: npm publish --access public --provenance
