@@ -67,15 +67,14 @@ def build_library_repository(settings: Settings) -> MetadataRepository:
             raise FileNotFoundError(msg)
         return SqliteCalibreRepository(db_path=db_path)
 
-    # Standalone mode: the core owns the database.
-    if not _is_sqlite(url):
-        msg = (
-            "Postgres for the book library is not wired yet; standalone mode "
-            "currently supports SQLite only. The system store may use Postgres."
-        )
-        raise NotImplementedError(msg)
-    # A local SQLite file needs its parent directory to exist first.
-    _sqlite_path(url).parent.mkdir(parents=True, exist_ok=True)
+    # Standalone mode: the core owns the database. The native repo is portable
+    # SQLAlchemy and supports SQLite and Postgres (both validated in
+    # test_repo_sql_native.py).
+    if _is_sqlite(url):
+        # A local SQLite file needs its parent directory to exist first.
+        _sqlite_path(url).parent.mkdir(parents=True, exist_ok=True)
+    else:
+        _check_driver_available(url)
     generator = SnowflakeGenerator(
         machine_id=settings.machine_id,
         epoch_ms=_SNOWFLAKE_EPOCH_MS,

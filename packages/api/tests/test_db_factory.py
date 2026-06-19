@@ -4,10 +4,11 @@
 the native repository in standalone mode (our schema, created on the spot) and
 the Calibre repository in calibre mode (reading an existing metadata.db — which
 must already exist, the core never creates it). ``build_system_db`` builds the
-system store and creates its schema. Postgres for the *library* is out of scope
-in this phase and must fail loudly.
+system store and creates its schema. Standalone mode supports both SQLite and
+Postgres for the library (the native repo is portable SQLAlchemy).
 """
 
+import os
 import shutil
 from pathlib import Path
 
@@ -43,17 +44,32 @@ class TestStandalone:
         assert page.total == 0
         repo.close()
 
-    def test_postgres_library_is_rejected(self, tmp_path: Path) -> None:
-        settings = _settings(
-            library_mode=LibraryMode.STANDALONE,
-            library_dir=tmp_path,
-            library_db="postgresql+psycopg://u:p@host/lib",
-        )
-        # Native repo on Postgres is allowed in principle, but until we validate
-        # it end-to-end the factory keeps the supported surface honest: SQLite
-        # only for now. (See plan: Postgres for the library is a later step.)
-        with pytest.raises(NotImplementedError, match=r"Postgres|postgres"):
-            build_library_repository(settings)
+    def test_postgres_library_is_accepted(self, tmp_path: Path) -> None:
+        # Standalone mode now supports Postgres for the library: the native repo
+        # is portable SQLAlchemy and is validated against real Postgres in
+        # test_repo_sql_native.py. The factory builds it against a real, ephemeral
+        # Postgres (skipped where Docker is unavailable).
+        try:
+            from testcontainers.postgres import PostgresContainer
+        except ImportError:  # pragma: no cover - testcontainers is a dev dep
+            pytest.skip("testcontainers not installed")
+        os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+        try:
+            container = PostgresContainer("postgres:16", driver="psycopg")
+            container.start()
+        except Exception as exc:  # pragma: no cover - environment without Docker
+            pytest.skip(f"Postgres testcontainer unavailable: {exc}")
+        try:
+            settings = _settings(
+                library_mode=LibraryMode.STANDALONE,
+                library_dir=tmp_path,
+                library_db=container.get_connection_url(),
+            )
+            repo = build_library_repository(settings)
+            assert isinstance(repo, SqlNativeRepository)
+            repo.close()
+        finally:
+            container.stop()
 
 
 class TestCalibre:
