@@ -11,6 +11,7 @@ The id generator is injected with a deterministic clock so created ids are
 stable and ordered within a test.
 """
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -41,15 +42,47 @@ def clock() -> _Clock:
     return _Clock()
 
 
-@pytest.fixture
-def repo(tmp_path: Path, clock: _Clock) -> Iterator[SqlNativeRepository]:
+# Every test using the `repo` fixture runs on BOTH SQLite and Postgres: the
+# native repo must be portable across the engines standalone mode supports. The
+# Postgres case spins up a real, ephemeral container — and is skipped (not
+# failed) where Docker is unavailable, so the suite still runs locally without
+# it; CI has Docker and exercises this path.
+@pytest.fixture(params=["sqlite", "postgres"])
+def repo(
+    request: pytest.FixtureRequest, tmp_path: Path, clock: _Clock
+) -> Iterator[SqlNativeRepository]:
     generator = SnowflakeGenerator(machine_id=1, epoch_ms=_EPOCH_MS, clock=clock)
-    repository = SqlNativeRepository(
-        conn_string=f"sqlite:///{tmp_path / 'library.db'}",
-        id_generator=generator,
-    )
-    yield repository
-    repository.close()
+
+    if request.param == "sqlite":
+        repository = SqlNativeRepository(
+            conn_string=f"sqlite:///{tmp_path / 'library.db'}",
+            id_generator=generator,
+        )
+        yield repository
+        repository.close()
+        return
+
+    try:
+        from testcontainers.postgres import PostgresContainer
+    except ImportError:  # pragma: no cover - testcontainers is a dev dep
+        pytest.skip("testcontainers not installed")
+    # The Ryuk reaper container can fail to map its port in some Docker setups;
+    # we stop our container explicitly in `finally`, so the reaper is redundant.
+    os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+    try:
+        container = PostgresContainer("postgres:16", driver="psycopg")
+        container.start()
+    except Exception as exc:  # pragma: no cover - environment without Docker
+        pytest.skip(f"Postgres testcontainer unavailable: {exc}")
+    try:
+        repository = SqlNativeRepository(
+            conn_string=container.get_connection_url(),
+            id_generator=generator,
+        )
+        yield repository
+        repository.close()
+    finally:
+        container.stop()
 
 
 def _new_book(**overrides: object) -> Book:

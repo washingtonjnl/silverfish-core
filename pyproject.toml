@@ -18,6 +18,10 @@ dev = [
     "httpx>=0.28",
     "pre-commit>=4.4",
     "types-defusedxml>=0.7",
+    # Postgres: the binary driver (native repo + system store) and testcontainers
+    # to spin up a real ephemeral Postgres for the repo tests.
+    "psycopg[binary]>=3.2",
+    "testcontainers[postgres]>=4.8",
     # S3 adapter + its in-process mock for tests (no AWS account/network needed).
     "boto3>=1.35",
     "boto3-stubs[s3]>=1.35",
@@ -102,6 +106,12 @@ files = ["packages/core/src", "packages/api/src", "packages/core/tests", "packag
 # to Any-errors; we keep our own signatures typed against the DriveClient port.
 [[tool.mypy.overrides]]
 module = ["googleapiclient.*", "google.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true
+
+# testcontainers (dev/test only) ships no type stubs / py.typed; used solely to
+# spin up an ephemeral Postgres in the repo tests.
+[[tool.mypy.overrides]]
+module = ["testcontainers.*"]
 ignore_missing_imports = true
 
 # ----------------------------------------------------------------------------
