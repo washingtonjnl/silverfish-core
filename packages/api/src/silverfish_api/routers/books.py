@@ -52,6 +52,10 @@ from silverfish_core.services.import_book import UploadedFile
 router = APIRouter(tags=["books"])
 
 
+class ConversionError(Exception):
+    """A conversion job's work failed; its message becomes the job's error."""
+
+
 def _read_or_none(storage: FileStorage, relative_path: str | None) -> bytes | None:
     """Read a file via storage, returning ``None`` if the path is unknown or the
     file is missing. Keeps the not-found handling in one place.
@@ -426,12 +430,17 @@ def convert_book(
     service = convert_service
 
     def work(report: ProgressCallback) -> None:
-        service.convert_book(
+        result = service.convert_book(
             book_id=book_id,
             source_format=source_format,
             target_format=target,
             on_progress=report,
         )
+        # A failed conversion returns ok=False rather than raising; surface it as
+        # the job's error so the job ends in 'error' (not a false 'done'), and the
+        # new format is never registered.
+        if not result.ok:
+            raise ConversionError(result.error or "Conversion failed")
 
     job_id = job_queue.submit("convert", work, key=dedup_key)
     job = job_queue.get(job_id)
