@@ -80,6 +80,32 @@ class TestConvert:
         formats = {f["extension"] for f in client.get("/books/1").json()["formats"]}
         assert "PDF" in formats
 
+    def test_failed_conversion_ends_in_error_not_done(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A conversion that fails returns ok=False (it does not raise). The job
+        # must end in 'error' with the reason — not a false 'done' — and the
+        # format must not be registered.
+        from silverfish_core.ports.types import ConversionResult
+
+        service = client.app.state.convert_service  # type: ignore[attr-defined]
+        monkeypatch.setattr(
+            service,
+            "convert_book",
+            lambda **_kwargs: ConversionResult(
+                ok=False, output_format="PDF", error="No PDF output plugin"
+            ),
+        )
+
+        job = client.post(
+            "/books/1/convert", json={"source_format": "EPUB", "target_format": "PDF"}
+        ).json()
+        final = _wait_done(client, job["id"])
+        assert final["status"] == "error"
+        assert "PDF" in str(final["error"])
+        formats = {f["extension"] for f in client.get("/books/1").json()["formats"]}
+        assert "PDF" not in formats
+
     def test_404_for_missing_book(self, client: TestClient) -> None:
         response = client.post(
             "/books/999999/convert", json={"source_format": "EPUB", "target_format": "PDF"}
