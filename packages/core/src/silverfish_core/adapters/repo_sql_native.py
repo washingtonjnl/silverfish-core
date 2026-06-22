@@ -375,6 +375,13 @@ class SqlNativeRepository:
                 session.delete(row)
                 session.commit()
 
+    def set_has_cover(self, book_id: int, has_cover: bool) -> None:
+        with Session(self._engine) as session:
+            row = session.get(ns.Book, book_id)
+            if row is not None:
+                row.has_cover = has_cover
+                session.commit()
+
     # --- entity upserts (case-insensitive, reuse existing) ------------------
 
     def _resolve_author_sorts(self, authors: Sequence[dm.Author]) -> list[dm.Author]:

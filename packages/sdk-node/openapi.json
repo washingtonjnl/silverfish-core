@@ -38,6 +38,20 @@
         "title": "BinaryHealthOut",
         "type": "object"
       },
+      "Body_set_book_cover": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_set_book_cover",
+        "type": "object"
+      },
       "Body_upload_book": {
         "properties": {
           "file": {
@@ -1355,6 +1369,90 @@
           }
         },
         "summary": "Get Book Cover",
+        "tags": [
+          "books"
+        ]
+      },
+      "put": {
+        "description": "Set (replace) a book's cover image.\n\nAccepts a multipart `file` that must be an image; the bytes are stored as the\nbook's cover and the book is marked as having one. Responds `204` on success,\n`400` if the upload isn't an image, `404` if the book doesn't exist, or `413`\nif it exceeds the upload size limit.",
+        "operationId": "set_book_cover",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_set_book_cover"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Set Book Cover",
         "tags": [
           "books"
         ]

@@ -35,6 +35,9 @@ class FakeRepository:
     def remove_format(self, book_id: int, book_format: str) -> None:
         raise NotImplementedError
 
+    def set_has_cover(self, book_id: int, has_cover: bool) -> None:
+        raise NotImplementedError
+
     # Unused by the convert service.
     def get_book(self, book_id: int) -> Book | None:
         raise NotImplementedError
