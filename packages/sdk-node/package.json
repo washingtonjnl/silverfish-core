@@ -3,6 +3,12 @@
   "version": "1.1.0",
   "description": "Official TypeScript client for the Silverfish API, generated from its OpenAPI contract.",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/washingtonjnl/silverfish-core.git",
+    "directory": "packages/sdk-node"
+  },
+  "homepage": "https://github.com/washingtonjnl/silverfish-core/tree/main/packages/sdk-node",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
