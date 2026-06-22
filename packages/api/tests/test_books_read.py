@@ -48,7 +48,7 @@ class TestListBooks:
     def test_item_shape(self, client: TestClient) -> None:
         response = client.get("/books")
         item = response.json()["items"][0]
-        assert {"id", "title", "authors", "tags", "rating"} <= set(item)
+        assert {"id", "title", "authors", "tags", "rating", "comment"} <= set(item)
 
     def test_rejects_invalid_page(self, client: TestClient) -> None:
         assert client.get("/books", params={"page": 0}).status_code == 422
@@ -64,6 +64,13 @@ class TestGetBook:
         assert body["title"] == "The Great Book"
         assert body["rating"] == 6
         assert [a["name"] for a in body["authors"]] == ["Jane Austen"]
+        # comment is exposed (null when the book has none).
+        assert "comment" in body
+
+    def test_exposes_a_saved_comment(self, client: TestClient) -> None:
+        client.patch("/books/1", json={"comment": "A fine read."})
+        body = client.get("/books/1").json()
+        assert body["comment"] == "A fine read."
 
     def test_missing_book_is_404(self, client: TestClient) -> None:
         assert client.get("/books/999").status_code == 404

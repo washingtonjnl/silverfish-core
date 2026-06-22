@@ -87,6 +87,8 @@ class BookOut(BaseModel):
     has_cover: bool
     # URL to fetch the cover image, present only when the book has one.
     cover_url: str | None
+    # Description/notes (HTML allowed), or null when the book has none.
+    comment: str | None
 
     @classmethod
     def from_domain(cls, book: Book, encode_id: Callable[[int], str]) -> "BookOut":
@@ -118,6 +120,7 @@ class BookOut(BaseModel):
             ],
             has_cover=book.has_cover,
             cover_url=f"/books/{book_id}/cover" if book.has_cover else None,
+            comment=book.comment,
         )
 
 
@@ -202,6 +205,18 @@ class EmailTestRequest(BaseModel):
     """Request to send a connectivity test email."""
 
     to_email: EmailStr = Field(description="Address to send the SMTP connectivity test email to.")
+
+
+class ConfigUpdate(BaseModel):
+    """Generic config write: a map of allowed keys to their new string values.
+
+    Only known keys are accepted (SMTP settings + kindle_email). Sending an empty
+    string for a secret key (the SMTP password) clears it.
+    """
+
+    values: dict[str, str] = Field(
+        description="Config key/value pairs to set. Unknown keys are rejected.",
+    )
 
 
 class ExportRequest(BaseModel):
