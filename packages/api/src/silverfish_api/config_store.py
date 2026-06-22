@@ -33,23 +33,51 @@ ALLOWED_KEYS: frozenset[str] = frozenset(
 SECRET_KEYS: frozenset[str] = frozenset({"smtp_password"})
 
 
-def read_config(system_db: SystemDatabase, keys: list[str]) -> dict[str, str | None]:
-    """Return values for the requested allowed keys (None when unset).
+# Config key → the env-backed Settings field that provides its default. Keys not
+# listed here (e.g. kindle_email) have no env source — only the store.
+_ENV_FIELD: dict[str, str] = {
+    "smtp_host": "smtp_host",
+    "smtp_port": "smtp_port",
+    "smtp_username": "smtp_username",
+    "smtp_password": "smtp_password",
+    "smtp_from": "smtp_from",
+    "smtp_security": "smtp_security",
+}
 
-    Unknown keys are ignored. Secret keys are never returned as their value;
-    instead they read back as a fixed placeholder when set, else None — so a UI
-    can show "configured" without learning the secret.
+
+def read_config(
+    system_db: SystemDatabase, keys: list[str], settings: Settings
+) -> dict[str, str | None]:
+    """Return the *effective* value for each requested allowed key.
+
+    Resolves store-overrides-env: a stored override wins, else the value from the
+    environment-provided settings (so a deployment's .env shows on screen). Secret
+    keys never return their value — they read back as a masked placeholder when
+    set in *either* source, else None.
     """
     out: dict[str, str | None] = {}
     for key in keys:
         if key not in ALLOWED_KEYS:
             continue
         stored = system_db.get_config(key)
+        env_value = _env_value(settings, key)
+        effective = stored if stored is not None else env_value
         if key in SECRET_KEYS:
-            out[key] = "********" if stored else None
+            out[key] = "********" if effective else None
         else:
-            out[key] = stored
+            out[key] = effective
     return out
+
+
+def _env_value(settings: Settings, key: str) -> str | None:
+    """The env-provided value for a config key, as a string (None/empty → None)."""
+    field = _ENV_FIELD.get(key)
+    if field is None:
+        return None
+    value = getattr(settings, field, None)
+    if value is None or value == "":
+        return None
+    return str(value)
 
 
 def write_config(system_db: SystemDatabase, values: dict[str, str]) -> list[str]:

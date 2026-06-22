@@ -29,10 +29,12 @@ def get_config(
 ) -> dict[str, str | None]:
     """Return the requested config values (None when unset).
 
-    Only known keys are returned; secret keys (the SMTP password) read back as a
-    masked placeholder when set, never their value.
+    Values are effective (a stored override wins, else the env default), so a
+    deployment's .env shows on screen. Secret keys (the SMTP password) read back
+    as a masked placeholder when set in either source, never their value.
     """
-    return read_config(request.app.state.system_db, keys)
+    state = request.app.state
+    return read_config(state.system_db, keys, state.settings)
 
 
 @router.post("/config", responses={**ERROR_422, **ERROR_500})
@@ -43,22 +45,22 @@ def set_config(payload: ConfigUpdate, request: Request) -> dict[str, str | None]
     ``kindle_email`` without resending SMTP. Unknown keys → 422. After a write,
     the mailer is rebuilt so SMTP changes take effect without a restart.
     """
+    state = request.app.state
     try:
-        written = write_config(request.app.state.system_db, payload.values)
+        written = write_config(state.system_db, payload.values)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # If any SMTP key changed, rebuild the mailer + send service from env+store
     # and swap them in, so the change takes effect without a restart.
     if any(k.startswith("smtp_") for k in written):
-        state = request.app.state
         mailer, send_service = build_send_chain(
             state.settings, state.system_db, state.repository, state.storage
         )
         state.mailer = mailer
         state.send_service = send_service
 
-    return read_config(request.app.state.system_db, written)
+    return read_config(state.system_db, written, state.settings)
 
 
 @router.get("/config/email", response_model=EmailConfigOut, responses={**ERROR_500})
