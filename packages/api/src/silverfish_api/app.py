@@ -16,11 +16,11 @@ from pydantic import BaseModel
 
 from silverfish_api import __version__
 from silverfish_api.config import load_settings
+from silverfish_api.config_store import build_send_chain
 from silverfish_api.db_factory import build_library_repository, build_system_db
 from silverfish_api.errors import ERROR_500, register_error_handlers
 from silverfish_api.export_service import ExportService
 from silverfish_api.export_store import ExportStore
-from silverfish_api.mailer_factory import build_mailer
 from silverfish_api.purge_scheduler import PurgeScheduler
 from silverfish_api.routers import books, config, export, jobs
 from silverfish_api.storage_factory import build_storage
@@ -35,7 +35,6 @@ from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
-from silverfish_core.services.send_to_ereader import SendToEreaderService
 from silverfish_core.system.job_store import SqlJobStore
 
 logger = logging.getLogger("silverfish")
@@ -120,17 +119,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         else None
     )
 
-    mailer = build_mailer(settings)
-    send_service = (
-        SendToEreaderService(
-            repository=repository,
-            storage=storage,
-            mailer=mailer,
-            max_attachment_bytes=settings.smtp_max_attachment_mb * 1024 * 1024,
-        )
-        if mailer is not None
-        else None
-    )
+    # Resolve SMTP from env, overridden by any runtime config in the system DB,
+    # so settings edited via the API survive a restart.
+    mailer, send_service = build_send_chain(settings, system_db, repository, storage)
 
     # Calibre export: available only when calibredb is present. The store holds
     # finished zips behind time-limited tokens; the service runs the export.

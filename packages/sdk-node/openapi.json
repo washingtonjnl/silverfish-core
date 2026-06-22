@@ -66,6 +66,17 @@
             "title": "Authors",
             "type": "array"
           },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
           "cover_url": {
             "anyOf": [
               {
@@ -168,7 +179,8 @@
           "identifiers",
           "formats",
           "has_cover",
-          "cover_url"
+          "cover_url",
+          "comment"
         ],
         "title": "BookOut",
         "type": "object"
@@ -344,6 +356,24 @@
           }
         },
         "title": "BookUpdate",
+        "type": "object"
+      },
+      "ConfigUpdate": {
+        "description": "Generic config write: a map of allowed keys to their new string values.\n\nOnly known keys are accepted (SMTP settings + kindle_email). Sending an empty\nstring for a secret key (the SMTP password) clears it.",
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Config key/value pairs to set. Unknown keys are rejected.",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "ConfigUpdate",
         "type": "object"
       },
       "ConvertRequest": {
@@ -814,7 +844,7 @@
   "info": {
     "summary": "Open-source core for an ebook library, exposed over HTTP.",
     "title": "Silverfish API",
-    "version": "0.13.0"
+    "version": "1.0.1.dev2+d68fe21"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1631,6 +1661,136 @@
         "summary": "Send Book",
         "tags": [
           "books"
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "description": "Return the requested config values (None when unset).\n\nOnly known keys are returned; secret keys (the SMTP password) read back as a\nmasked placeholder when set, never their value.",
+        "operationId": "get_config",
+        "parameters": [
+          {
+            "description": "Config keys to read. Unknown keys are omitted.",
+            "in": "query",
+            "name": "keys",
+            "required": true,
+            "schema": {
+              "description": "Config keys to read. Unknown keys are omitted.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Keys",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Config",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get Config",
+        "tags": [
+          "config"
+        ]
+      },
+      "post": {
+        "description": "Set one or more config values and return their (masked) readback.\n\nOnly the provided keys change; others are untouched, so a UI can edit just\n``kindle_email`` without resending SMTP. Unknown keys \u2192 422. After a write,\nthe mailer is rebuilt so SMTP changes take effect without a restart.",
+        "operationId": "set_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "title": "Response Set Config",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Set Config",
+        "tags": [
+          "config"
         ]
       }
     },

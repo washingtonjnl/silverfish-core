@@ -7,13 +7,58 @@ is reported by ``/health`` (``send_available``); the detail view here is for
 display.
 """
 
-from fastapi import APIRouter, HTTPException, Request, status
+from typing import Annotated
 
+from fastapi import APIRouter, HTTPException, Query, Request, status
+
+from silverfish_api.config_store import build_send_chain, read_config, write_config
 from silverfish_api.deps import MailerDep
-from silverfish_api.errors import ERROR_500, ERROR_503
-from silverfish_api.schemas import EmailConfigOut, EmailTestRequest
+from silverfish_api.errors import ERROR_422, ERROR_500, ERROR_503
+from silverfish_api.schemas import ConfigUpdate, EmailConfigOut, EmailTestRequest
 
 router = APIRouter(tags=["config"])
+
+
+@router.get("/config", responses={**ERROR_500})
+def get_config(
+    request: Request,
+    keys: Annotated[
+        list[str],
+        Query(description="Config keys to read. Unknown keys are omitted."),
+    ],
+) -> dict[str, str | None]:
+    """Return the requested config values (None when unset).
+
+    Only known keys are returned; secret keys (the SMTP password) read back as a
+    masked placeholder when set, never their value.
+    """
+    return read_config(request.app.state.system_db, keys)
+
+
+@router.post("/config", responses={**ERROR_422, **ERROR_500})
+def set_config(payload: ConfigUpdate, request: Request) -> dict[str, str | None]:
+    """Set one or more config values and return their (masked) readback.
+
+    Only the provided keys change; others are untouched, so a UI can edit just
+    ``kindle_email`` without resending SMTP. Unknown keys → 422. After a write,
+    the mailer is rebuilt so SMTP changes take effect without a restart.
+    """
+    try:
+        written = write_config(request.app.state.system_db, payload.values)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # If any SMTP key changed, rebuild the mailer + send service from env+store
+    # and swap them in, so the change takes effect without a restart.
+    if any(k.startswith("smtp_") for k in written):
+        state = request.app.state
+        mailer, send_service = build_send_chain(
+            state.settings, state.system_db, state.repository, state.storage
+        )
+        state.mailer = mailer
+        state.send_service = send_service
+
+    return read_config(request.app.state.system_db, written)
 
 
 @router.get("/config/email", response_model=EmailConfigOut, responses={**ERROR_500})
