@@ -1666,7 +1666,7 @@
     },
     "/config": {
       "get": {
-        "description": "Return the requested config values (None when unset).\n\nOnly known keys are returned; secret keys (the SMTP password) read back as a\nmasked placeholder when set, never their value.",
+        "description": "Return the requested config values (None when unset).\n\nValues are effective (a stored override wins, else the env default), so a\ndeployment's .env shows on screen. Secret keys (the SMTP password) read back\nas a masked placeholder when set in either source, never their value.",
         "operationId": "get_config",
         "parameters": [
           {
