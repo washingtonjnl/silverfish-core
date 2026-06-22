@@ -326,6 +326,32 @@ def get_book_cover(book_id: BookIdDep, repository: RepositoryDep, storage: Stora
     return Response(content=data, media_type="image/jpeg")
 
 
+@router.put(
+    "/books/{book_id}/cover",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**ERROR_400, **ERROR_404, **ERROR_413, **ERROR_500},
+)
+async def set_book_cover(
+    book_id: BookIdDep,
+    file: UploadFile,
+    edit_service: EditServiceDep,
+    settings: SettingsDep,
+) -> Response:
+    """Set (replace) a book's cover image.
+
+    Accepts a multipart `file` that must be an image; the bytes are stored as the
+    book's cover and the book is marked as having one. Responds `204` on success,
+    `400` if the upload isn't an image, `404` if the book doesn't exist, or `413`
+    if it exceeds the upload size limit.
+    """
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="Cover must be an image")
+    data = await _read_capped(file, settings.upload_max_mb * 1024 * 1024)
+    if not edit_service.set_cover(book_id, data):
+        raise HTTPException(status_code=404, detail="Book not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get(
     "/books/{book_id}/formats/{book_format}",
     responses={**ERROR_404, **ERROR_500},

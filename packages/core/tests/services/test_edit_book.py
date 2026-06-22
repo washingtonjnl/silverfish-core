@@ -55,6 +55,11 @@ class FakeRepository:
         self.removed_formats.append((book_id, book_format.upper()))
         self.formats.pop((book_id, book_format.upper()), None)
 
+    def set_has_cover(self, book_id: int, has_cover: bool) -> None:
+        book = self.books.get(book_id)
+        if book is not None:
+            self.books[book_id] = dataclasses.replace(book, has_cover=has_cover)
+
     # Unused by the edit service.
     def list_books(self, *, page: int, page_size: int, sort: SortOrder) -> Page[Book]:
         raise NotImplementedError
@@ -79,6 +84,7 @@ class FakeStorage:
     def __init__(self) -> None:
         self.moves: list[tuple[str, str]] = []
         self.deleted: list[str] = []
+        self.covers: dict[str, bytes] = {}
 
     def move(self, old_path: str, new_path: str) -> None:
         self.moves.append((old_path, new_path))
@@ -86,14 +92,14 @@ class FakeStorage:
     def delete(self, path: str) -> None:
         self.deleted.append(path)
 
+    def write_cover(self, book_dir: str, data: bytes) -> None:
+        self.covers[book_dir] = data
+
     # Unused here.
     def read_book_file(self, path: str) -> bytes:
         raise NotImplementedError
 
     def write_book_file(self, path: str, data: bytes) -> None:
-        raise NotImplementedError
-
-    def write_cover(self, book_dir: str, data: bytes) -> None:
         raise NotImplementedError
 
 
@@ -180,3 +186,21 @@ class TestDeleteFormat:
         assert removed is False
         assert repo.removed_formats == []
         assert storage.deleted == []
+
+
+class TestSetCover:
+    def test_writes_the_cover_and_marks_the_book(self) -> None:
+        service, repo, storage = _service()
+        repo.add(_book(1, title="Old Title"), "Jane Austen/Old Title (1)")
+
+        ok = service.set_cover(1, b"IMG")
+
+        assert ok is True
+        assert storage.covers["Jane Austen/Old Title (1)"] == b"IMG"
+        updated = repo.get_book(1)
+        assert updated is not None and updated.has_cover is True
+
+    def test_returns_false_for_missing_book(self) -> None:
+        service, _repo, storage = _service()
+        assert service.set_cover(999, b"IMG") is False
+        assert storage.covers == {}

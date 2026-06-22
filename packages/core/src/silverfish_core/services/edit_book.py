@@ -54,6 +54,17 @@ class EditBookService:
         self._repository.delete_book(book_id)
         self._storage.delete(book_dir)
 
+    def set_cover(self, book_id: int, data: bytes) -> bool:
+        """Set a book's cover image: write the file and mark the book as having
+        one. Returns ``False`` if the book doesn't exist, ``True`` on success.
+        """
+        book_dir = self._repository.book_dir(book_id)
+        if book_dir is None:
+            return False
+        self._storage.write_cover(book_dir, data)
+        self._repository.set_has_cover(book_id, True)
+        return True
+
     def delete_format(self, book_id: int, book_format: str) -> bool:
         """Remove a single format from a book: its file and its ``data`` row.
 

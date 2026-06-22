@@ -56,6 +56,43 @@ class TestCover:
         assert client.get("/books/999999/cover").status_code == 404
 
 
+class TestSetCover:
+    def test_sets_and_replaces_the_cover(self, client: TestClient) -> None:
+        new = b"\xff\xd8NEW-COVER"
+        res = client.put(
+            "/books/1/cover",
+            files={"file": ("c.jpg", new, "image/jpeg")},
+        )
+        assert res.status_code == 204
+        # The cover now downloads as the new bytes.
+        assert client.get("/books/1/cover").content == new
+
+    def test_sets_cover_on_a_book_that_had_none(self, client: TestClient) -> None:
+        # Book 2 has no cover; setting one makes it downloadable + marks has_cover.
+        assert client.get("/books/2/cover").status_code == 404
+        res = client.put(
+            "/books/2/cover",
+            files={"file": ("c.png", b"\x89PNG-DATA", "image/png")},
+        )
+        assert res.status_code == 204
+        assert client.get("/books/2/cover").status_code == 200
+        assert client.get("/books/2").json()["has_cover"] is True
+
+    def test_rejects_a_non_image(self, client: TestClient) -> None:
+        res = client.put(
+            "/books/1/cover",
+            files={"file": ("x.txt", b"not an image", "text/plain")},
+        )
+        assert res.status_code == 400
+
+    def test_404_for_missing_book(self, client: TestClient) -> None:
+        res = client.put(
+            "/books/999999/cover",
+            files={"file": ("c.jpg", b"\xff\xd8x", "image/jpeg")},
+        )
+        assert res.status_code == 404
+
+
 class TestDownload:
     def test_downloads_format(self, client: TestClient) -> None:
         response = client.get("/books/1/formats/epub")
@@ -101,5 +138,6 @@ class TestOpenAPI:
     def test_endpoints_documented(self, client: TestClient) -> None:
         schema = client.get("/openapi.json").json()
         assert "/books/{book_id}/cover" in schema["paths"]
+        assert "put" in schema["paths"]["/books/{book_id}/cover"]
         assert "/books/{book_id}/formats/{book_format}" in schema["paths"]
         assert "delete" in schema["paths"]["/books/{book_id}/formats/{book_format}"]

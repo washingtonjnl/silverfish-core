@@ -68,6 +68,10 @@ class MetadataRepository(Protocol):
         """Remove a book's format record (a ``data`` row). Case-insensitive."""
         ...
 
+    def set_has_cover(self, book_id: int, has_cover: bool) -> None:
+        """Mark whether a book has a cover (the cover file is written separately)."""
+        ...
+
     def close(self) -> None:
         """Release the repository's resources (e.g. the database engine)."""
         ...
