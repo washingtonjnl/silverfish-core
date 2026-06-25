@@ -712,7 +712,8 @@
         "enum": [
           "convert",
           "send",
-          "export"
+          "export",
+          "write_metadata"
         ],
         "title": "JobType",
         "type": "string"
@@ -851,6 +852,44 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "WriteMetadataJob": {
+        "description": "A single per-format job spawned by a write-metadata request.",
+        "properties": {
+          "format": {
+            "description": "The book format this job writes metadata into, e.g. 'EPUB'.",
+            "title": "Format",
+            "type": "string"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobOut",
+            "description": "The background job to poll at /jobs/{id}."
+          }
+        },
+        "required": [
+          "format",
+          "job"
+        ],
+        "title": "WriteMetadataJob",
+        "type": "object"
+      },
+      "WriteMetadataJobsOut": {
+        "description": "The jobs spawned by a write-metadata request \u2014 one per existing format.",
+        "properties": {
+          "jobs": {
+            "description": "One job per format the book has; each writes that format's file independently.",
+            "items": {
+              "$ref": "#/components/schemas/WriteMetadataJob"
+            },
+            "title": "Jobs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs"
+        ],
+        "title": "WriteMetadataJobsOut",
         "type": "object"
       }
     }
@@ -1757,6 +1796,99 @@
           }
         },
         "summary": "Send Book",
+        "tags": [
+          "books"
+        ]
+      }
+    },
+    "/books/{book_id}/write-metadata": {
+      "post": {
+        "description": "Embed the book's current metadata into its files, one job per format.\n\nWrites the library's metadata back into every format the book has on disk, so\nan e-reader shows what the library shows. Spawns one background job per\nformat (returned in `jobs`, each pollable at `/jobs/{id}`), so a slow or\nfailing file never blocks the others. Responds with `404` if the book is\nmissing, `503` if `ebook-meta` is unavailable, and `400` if the book has no\nfiles to write into. A format whose write is already in progress is skipped\nrather than duplicated.",
+        "operationId": "write_metadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "book_id",
+            "required": true,
+            "schema": {
+              "title": "Book Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteMetadataJobsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "summary": "Write Metadata",
         "tags": [
           "books"
         ]

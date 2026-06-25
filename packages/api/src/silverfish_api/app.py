@@ -30,11 +30,13 @@ from silverfish_core.adapters.export_calibre import CalibreExporter
 from silverfish_core.adapters.extract_composite import CompositeMetadataExtractor
 from silverfish_core.adapters.extract_ebook_meta import EbookMetaExtractor
 from silverfish_core.adapters.extract_python import PythonMetadataExtractor
+from silverfish_core.adapters.inject_ebook_meta import EbookMetaInjector
 from silverfish_core.jobs.queue import JobQueue
 from silverfish_core.services.convert_book import ConvertBookService
 from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
+from silverfish_core.services.write_metadata import WriteMetadataService
 from silverfish_core.system.job_store import SqlJobStore
 
 logger = logging.getLogger("silverfish")
@@ -118,6 +120,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         if binaries.ebook_convert is not None
         else None
     )
+    # Write-back: embed the DB metadata into the files, available only when
+    # ebook-meta is present (it rewrites every format Calibre can write).
+    write_metadata_service = (
+        WriteMetadataService(
+            repository=repository,
+            storage=storage,
+            injector=EbookMetaInjector(ebook_meta=binaries.ebook_meta),
+        )
+        if binaries.ebook_meta is not None
+        else None
+    )
 
     # Resolve SMTP from env, overridden by any runtime config in the system DB,
     # so settings edited via the API survive a restart.
@@ -164,6 +177,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.binaries = binaries
     app.state.job_queue = job_queue
     app.state.convert_service = convert_service
+    app.state.write_metadata_service = write_metadata_service
     app.state.mailer = mailer
     app.state.send_service = send_service
     app.state.export_store = export_store

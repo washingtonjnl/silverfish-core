@@ -127,6 +127,12 @@ filterwarnings = [
     # it is third-party and out of our control. Tolerate just this one. The
     # category is starlette's own StarletteDeprecationWarning, matched by message.
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+    # When Docker is unreachable, the Postgres testcontainer's docker-py client
+    # leaks its unix socket to the daemon; a later GC raises an unraisable
+    # ResourceWarning that (as an error) would fail whatever unrelated test is
+    # running. The socket is docker-py's to close, not ours, and this only bites
+    # on machines without Docker (CI has it). Tolerate just that socket warning.
+    "ignore:unclosed <socket.socket:ResourceWarning",
 ]
 
 [tool.coverage.run]
