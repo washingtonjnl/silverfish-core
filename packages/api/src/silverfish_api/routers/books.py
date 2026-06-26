@@ -17,6 +17,7 @@ from silverfish_api.deps import (
     SendServiceDep,
     SettingsDep,
     StorageDep,
+    WriteMetadataServiceDep,
 )
 from silverfish_api.errors import (
     ERROR_400,
@@ -36,6 +37,8 @@ from silverfish_api.schemas import (
     JobOut,
     RefreshRequest,
     SendRequest,
+    WriteMetadataJob,
+    WriteMetadataJobsOut,
 )
 from silverfish_core.domain.models import Author, Book, Series, Tag
 from silverfish_core.jobs.queue import ProgressCallback
@@ -500,6 +503,67 @@ def refresh_metadata(
         code = 404 if "not found" in message.lower() else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=code, detail=message) from exc
     return BookOut.from_domain(book, codec.encode)
+
+
+@router.post(
+    "/books/{book_id}/write-metadata",
+    response_model=WriteMetadataJobsOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={**ERROR_400, **ERROR_404, **ERROR_409, **ERROR_503, **ERROR_500},
+)
+def write_metadata(
+    book_id: BookIdDep,
+    repository: RepositoryDep,
+    write_service: WriteMetadataServiceDep,
+    job_queue: JobQueueDep,
+) -> WriteMetadataJobsOut:
+    """Embed the book's current metadata into its files, one job per format.
+
+    Writes the library's metadata back into every format the book has on disk, so
+    an e-reader shows what the library shows. Spawns one background job per
+    format (returned in `jobs`, each pollable at `/jobs/{id}`), so a slow or
+    failing file never blocks the others. Responds with `404` if the book is
+    missing, `503` if `ebook-meta` is unavailable, and `400` if the book has no
+    files to write into. A format whose write is already in progress is skipped
+    rather than duplicated.
+    """
+    book = repository.get_book(book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if write_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Writing metadata is unavailable: ebook-meta is not installed",
+        )
+
+    formats = [fmt.extension.upper() for fmt in book.formats]
+    if not formats:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The book has no files to write metadata into",
+        )
+
+    service = write_service
+    spawned: list[WriteMetadataJob] = []
+    for book_format in formats:
+        dedup_key = f"write_metadata:{book_id}:{book_format}"
+        existing = job_queue.find_active(dedup_key)
+        if existing is not None:
+            # An identical write is already in flight; reuse it instead of
+            # duplicating the work on the same file.
+            spawned.append(WriteMetadataJob(format=book_format, job=JobOut.from_job(existing)))
+            continue
+
+        def work(report: ProgressCallback, fmt: str = book_format) -> None:
+            service.write_format(book_id=book_id, book_format=fmt, on_progress=report)
+
+        job_id = job_queue.submit("write_metadata", work, key=dedup_key)
+        job = job_queue.get(job_id)
+        if job is None:  # pragma: no cover - just submitted
+            raise HTTPException(status_code=500, detail="Failed to enqueue job")
+        spawned.append(WriteMetadataJob(format=book_format, job=JobOut.from_job(job)))
+
+    return WriteMetadataJobsOut(jobs=spawned)
 
 
 @router.post(

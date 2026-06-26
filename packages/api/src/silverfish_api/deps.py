@@ -20,6 +20,7 @@ from silverfish_core.services.edit_book import EditBookService
 from silverfish_core.services.import_book import ImportBookService
 from silverfish_core.services.refresh_metadata import RefreshMetadataService
 from silverfish_core.services.send_to_ereader import SendToEreaderService
+from silverfish_core.services.write_metadata import WriteMetadataService
 from silverfish_core.system import SystemDatabase
 
 
@@ -127,6 +128,15 @@ def get_send_service(request: Request) -> SendToEreaderService | None:
     return service
 
 
+def get_write_metadata_service(request: Request) -> WriteMetadataService | None:
+    """Return the write-metadata service, or ``None`` when ebook-meta is absent."""
+    service = request.app.state.write_metadata_service
+    if service is not None and not isinstance(service, WriteMetadataService):
+        msg = "Write-metadata service is misconfigured on the application state"
+        raise RuntimeError(msg)
+    return service
+
+
 def get_mailer(request: Request) -> Mailer | None:
     """Return the mailer, or ``None`` when SMTP is unconfigured."""
     mailer = request.app.state.mailer
@@ -172,6 +182,9 @@ JobQueueDep = Annotated[JobQueue, Depends(get_job_queue)]
 ConvertServiceDep = Annotated[ConvertBookService | None, Depends(get_convert_service)]
 RefreshServiceDep = Annotated[RefreshMetadataService, Depends(get_refresh_service)]
 SendServiceDep = Annotated[SendToEreaderService | None, Depends(get_send_service)]
+WriteMetadataServiceDep = Annotated[
+    WriteMetadataService | None, Depends(get_write_metadata_service)
+]
 MailerDep = Annotated[Mailer | None, Depends(get_mailer)]
 SystemDbDep = Annotated[SystemDatabase, Depends(get_system_db)]
 ExportServiceDep = Annotated[ExportService | None, Depends(get_export_service)]

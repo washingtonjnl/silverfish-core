@@ -243,6 +243,7 @@ class JobType(StrEnum):
     CONVERT = "convert"
     SEND = "send"
     EXPORT = "export"
+    WRITE_METADATA = "write_metadata"
 
 
 class JobStatusOut(StrEnum):
@@ -277,6 +278,21 @@ class JobOut(BaseModel):
             message=job.message,
             error=job.error,
         )
+
+
+class WriteMetadataJob(BaseModel):
+    """A single per-format job spawned by a write-metadata request."""
+
+    format: str = Field(description="The book format this job writes metadata into, e.g. 'EPUB'.")
+    job: JobOut = Field(description="The background job to poll at /jobs/{id}.")
+
+
+class WriteMetadataJobsOut(BaseModel):
+    """The jobs spawned by a write-metadata request — one per existing format."""
+
+    jobs: list[WriteMetadataJob] = Field(
+        description="One job per format the book has; each writes that format's file independently."
+    )
 
 
 class BookPage(BaseModel):
