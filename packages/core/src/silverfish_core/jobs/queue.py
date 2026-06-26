@@ -5,6 +5,7 @@ callback to publish progress (0.0-1.0). Job state (status, progress, result or
 error) is tracked under a lock so it can be polled safely from request threads.
 """
 
+import logging
 import queue as queue_module
 import threading
 import uuid
@@ -14,6 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 from silverfish_core.jobs.store import JobState, JobStore
+
+logger = logging.getLogger("silverfish")
 
 # A job's work function: it receives a progress-reporting callback and returns
 # any result (stored on the job). The callback takes the progress fraction and
@@ -143,7 +146,10 @@ class JobQueue:
             result = job._func(report)
         except Exception as exc:
             # Any failure in user work becomes the job's error state, never
-            # crashing the worker thread.
+            # crashing the worker thread. The stored error is just the message,
+            # so also log the full traceback — that's what makes a failed job
+            # diagnosable from the console without digging into the database.
+            logger.exception("Job %s (%s) failed", job_id, job.type)
             self._set(job_id, status=JobStatus.ERROR, error=str(exc))
             return
         self._set(job_id, status=JobStatus.DONE, progress=1.0, result=result)

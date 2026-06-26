@@ -6,9 +6,12 @@ exposes progress, so slow work like conversion can be polled instead of blocking
 a request.
 """
 
+import logging
 import threading
 import time
 from collections.abc import Callable
+
+import pytest
 
 from silverfish_core.jobs.queue import Job, JobQueue, JobStatus, ProgressCallback
 
@@ -64,6 +67,37 @@ class TestSubmitAndComplete:
             assert job.status is JobStatus.ERROR
             assert job.error is not None
             assert "kaboom" in job.error
+        finally:
+            queue.stop()
+
+    def test_failing_job_logs_the_exception_with_traceback(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The job's stored error is just the message; the full traceback must
+        # also reach the logs so a failed job can be diagnosed from the console
+        # without inspecting the database.
+        queue = JobQueue()
+        queue.start()
+        try:
+
+            def boom(_report: ProgressCallback) -> None:
+                msg = "kaboom"
+                raise RuntimeError(msg)
+
+            with caplog.at_level(logging.ERROR, logger="silverfish"):
+                job_id = queue.submit("convert", boom)
+                _wait_until(lambda: _require(queue, job_id).status is JobStatus.ERROR)
+
+            records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+            assert records, "expected an error log for the failed job"
+            record = records[-1]
+            # The job id and type are in the message so the log is searchable.
+            assert job_id in record.getMessage()
+            assert "convert" in record.getMessage()
+            # exc_info present means the traceback is attached and rendered.
+            assert record.exc_info is not None
+            assert "kaboom" in caplog.text
+            assert "RuntimeError" in caplog.text
         finally:
             queue.stop()
 
